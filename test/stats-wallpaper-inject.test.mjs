@@ -204,6 +204,7 @@ test('injected scripts include key repeat guard, res.ok check, X-QoL-Token heade
 
   const statsJs = buildStatsBarInjectJS('zh', 'sidecar__context/context_panel__/', ['status', 'turns'], 9555, 'secret_tok');
   assert.ok(statsJs.includes('window.__agyStatsPort = STATS_PORT'));
+  assert.ok(statsJs.includes('window.__agyRenderStats = (convId, d) =>'));
   assert.ok(statsJs.includes("'X-QoL-Token': STATS_TOKEN"));
   assert.ok(!statsJs.includes('?t='));
   assert.ok(statsJs.includes('if (!res.ok)'));

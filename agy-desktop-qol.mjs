@@ -28,7 +28,7 @@ import { getHostVersion } from './src/cdp.mjs';
 import { applyConfig } from './src/inject.mjs';
 import { ensureStatsServer, getActiveStatsPort } from './src/stats-server.mjs';
 import { expandHomePath } from './src/wallpaper.mjs';
-import { startWatchLoop } from './src/watch.mjs';
+import { startLifecycleGuard, startWatchLoop } from './src/watch.mjs';
 import { runTUI } from './src/tui.mjs';
 
 export {
@@ -43,6 +43,7 @@ export {
   normalizePort,
   normalizeStatsBarItems,
   saveConfig,
+  startLifecycleGuard,
   startWatchLoop,
 };
 
@@ -54,7 +55,8 @@ async function main() {
 
   const arg1 = process.argv[2];
   if (arg1 === '--watch') {
-    startWatchLoop(3000);
+    startLifecycleGuard(3000);
+    startWatchLoop(1000);
     return;
   }
   if (!arg1) {

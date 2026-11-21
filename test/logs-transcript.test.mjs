@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  getLanguageServerLogPath,
   inspectLanguageServerLogText,
   parseGlogTimestamp,
   readLogTail,
@@ -151,5 +152,22 @@ test('computeConversationStats expires old ERROR_MESSAGE steps back to idle afte
     assert.equal(stale.live.phase, 'idle');
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('getLanguageServerLogPath discovers newest remote server ls-*.log in .antigravity-hub-server/data', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-qol-hub-'));
+  const hubData = path.join(tmpHome, '.antigravity-hub-server', 'data');
+  fs.mkdirSync(hubData, { recursive: true });
+  const olderLog = path.join(hubData, 'ls-old.log');
+  const newerLog = path.join(hubData, 'ls-new.log');
+  try {
+    fs.writeFileSync(olderLog, 'old');
+    fs.writeFileSync(newerLog, 'new');
+    const past = new Date(Date.now() - 10000);
+    fs.utimesSync(olderLog, past, past);
+    assert.equal(getLanguageServerLogPath(tmpHome), newerLog);
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });

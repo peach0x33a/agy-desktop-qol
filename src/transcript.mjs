@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inspectLanguageServerLog } from './logs.mjs';
+import { inspectLanguageServerLog, resolveConvHomeDir } from './logs.mjs';
 import { readDbMaxTokenLimit, readDbTimingStats } from './proto-db.mjs';
 
 const transcriptCache = new Map();
@@ -122,7 +122,8 @@ export function inferContextLimit(model, convId, opts = {}) {
   // 旧版 .pbtxt 会话仍可直接读取
   try {
     const convDir =
-      opts.conversationsDir || path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
+      opts.conversationsDir ||
+      path.join(opts.homeDir || os.homedir(), '.gemini', 'antigravity', 'conversations');
     const pbtxtPath = path.join(convDir, `${convId}.pbtxt`);
     if (fs.existsSync(pbtxtPath)) {
       const m = fs
@@ -148,8 +149,9 @@ export function inferContextLimit(model, convId, opts = {}) {
 
 export function computeConversationStats(convId, opts = {}) {
   if (!/^[a-zA-Z0-9_-]+$/.test(convId)) return null;
+  const homeDir = opts.homeDir || (opts.brainDir ? os.homedir() : resolveConvHomeDir(convId));
   const brainDir =
-    opts.brainDir || path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
+    opts.brainDir || path.join(homeDir, '.gemini', 'antigravity', 'brain');
   const logPath = path.join(
     brainDir,
     convId,
@@ -207,6 +209,7 @@ export function computeConversationStats(convId, opts = {}) {
     if (isWorking) {
       const ls = inspectLanguageServerLog(stepTs, {
         logPath: opts.lsLogPath,
+        homeDir,
         nowMs,
       });
 
@@ -266,8 +269,9 @@ export function computeConversationStats(convId, opts = {}) {
     }
   }
 
-  const maxContext = inferContextLimit(lastModel, convId, opts);
-  const dbTiming = readDbTimingStats(convId, opts);
+  const resolvedOpts = { ...opts, homeDir };
+  const maxContext = inferContextLimit(lastModel, convId, resolvedOpts);
+  const dbTiming = readDbTimingStats(convId, resolvedOpts);
   const totalTokens = inputTokens + cacheReadTokens + outputTokens;
   const promptTokens = inputTokens + cacheReadTokens;
   const cacheHitRate = promptTokens > 0 ? Math.round((cacheReadTokens / promptTokens) * 100) : 0;

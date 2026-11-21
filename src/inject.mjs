@@ -14,6 +14,7 @@ import {
 } from './config.mjs';
 import { ensureCDPReady, evalOverCDP, isInjectablePage } from './cdp.mjs';
 import { getStatsToken, resolveStatsPort } from './stats-server.mjs';
+import { computeConversationStats } from './transcript.mjs';
 import { resolveWallpaperBgUrl } from './wallpaper.mjs';
 
 export function buildInjectJS(id, cssText) {
@@ -216,6 +217,109 @@ export function buildStatsBarInjectJS(
       if (popWrap) popWrap.style.display = 'none';
     };
 
+    const renderData = (bar, d) => {
+      const turns = Number(d.turns || 0);
+      const steps = Number(d.steps || 0);
+      const totalTokens = Number(d.totalTokens || 0);
+      const outputTokens = Number(d.outputTokens || 0);
+      const cacheHitRate = Number(d.cacheHitRate || 0);
+      const pct = Number(d.contextPct || 0);
+      const r = 5;
+      const c = 2 * Math.PI * r;
+      const offset = c - (pct / 100) * c;
+      const ringSvg =
+        '<svg width="14" height="14" viewBox="0 0 14 14" style="transform:rotate(-90deg);flex-shrink:0;">' +
+        '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="light-dark(rgba(10,10,12,0.16), rgba(255,255,255,0.18))" stroke-width="2"/>' +
+        '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="light-dark(rgba(10,10,12,0.72), rgba(255,255,255,0.78))" stroke-width="2" stroke-dasharray="' + c.toFixed(2) + '" stroke-dashoffset="' + offset.toFixed(2) + '" stroke-linecap="round"/>' +
+        '</svg>';
+      const gaugeSvg =
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
+        '<path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>';
+      const dbSvg =
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
+        '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>';
+      const liveBadge = formatLiveBadge(d.live);
+      const pop = document.getElementById('agy-stats-popover');
+      if (pop) {
+        const row = (k, v) =>
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;">' +
+          '<span style="color:var(--muted-foreground,light-dark(#52525b,rgba(255,255,255,0.62)));">' + k + '</span>' +
+          '<span style="font-variant-numeric:tabular-nums;">' + v + '</span></div>';
+        let liveHtml = '';
+        if (liveBadge) {
+          const isErr = d.live && (d.live.phase === 'retry' || d.live.phase === 'error');
+          const detailText = liveBadge.detail || '';
+          const detailColor = isErr ? 'light-dark(#dc2626,rgba(248,113,113,0.9))' : 'var(--muted-foreground,light-dark(#52525b,rgba(255,255,255,0.65)))';
+          const detailLine = detailText
+            ? '<div style="margin-top:5px;font-size:11px;line-height:1.4;color:' + detailColor + ';word-break:break-word;">' + esc(detailText) + '</div>'
+            : '';
+          liveHtml =
+            '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border,light-dark(rgba(10,10,12,0.1),rgba(255,255,255,0.1)));">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+            '<span style="color:var(--muted-foreground,light-dark(#52525b,rgba(255,255,255,0.62)));flex-shrink:0;">' + L.liveTitle + '</span>' +
+            '<span style="color:' + liveBadge.color + ';font-weight:500;text-align:right;">' + esc(liveBadge.popText) + '</span></div>' +
+            detailLine + '</div>';
+        }
+        const nextPopHtml =
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:6px;border-bottom:1px solid var(--border,light-dark(rgba(10,10,12,0.1),rgba(255,255,255,0.1)));font-weight:600;">' +
+          '<span style="display:inline-flex;align-items:center;gap:6px;">' + gaugeSvg + L.popTitle + '</span><span>' + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + '</span></div>' +
+          row(L.modelTime, formatDuration(d.modelSeconds)) +
+          row(L.tps, (d.tps || '--') + ' tok/s') +
+          row(L.outTok, formatTok(outputTokens)) +
+          row(L.totTok, formatTok(totalTokens)) +
+          row(L.cacheRate, cacheHitRate + '%') +
+          row(L.ctxUsage, formatTok(d.lastContextTokens || 0) + ' / ' + formatTok(d.maxContext || 512000) + ' (' + pct + '%)') +
+          liveHtml;
+        if (pop.dataset.lastHtml !== nextPopHtml) {
+          pop.dataset.lastHtml = nextPopHtml;
+          pop.innerHTML = nextPopHtml;
+        }
+      }
+      const summary = ensureSummary(bar);
+      const liveSpan =
+        '<span style="display:inline-flex;align-items:center;gap:6px;color:' + liveBadge.color + ';font-weight:' + (liveBadge.idle ? '400' : '500') + ';">' +
+        '<span style="width:6px;height:6px;border-radius:50%;background:' + liveBadge.dot + ';display:inline-block;"></span>' +
+        esc(liveBadge.barText) + '</span>';
+      const partMap = {
+        status: liveSpan,
+        turns: '<span style="display:inline-flex;align-items:center;gap:5px;">' + gaugeSvg + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + ' · ' + (d.tps || '--') + ' tok/s</span>',
+        tokens: '<span style="display:inline-flex;align-items:center;gap:5px;">' + dbSvg + formatTok(totalTokens) + ' tok · ' + L.cacheHit + ' ' + cacheHitRate + '%</span>',
+        context: '<span id="agy-context-trigger" style="display:inline-flex;align-items:center;gap:5px;">' + ringSvg + pct + '%</span>',
+      };
+      const sep = '<span style="opacity:0.35">|</span>';
+      const nextSummaryHtml = ITEMS.map((k) => partMap[k]).filter(Boolean).join(sep);
+      summary.style.cursor = CLICK_TARGET ? 'pointer' : 'default';
+      summary.title = CLICK_TARGET || '';
+      if (summary.dataset.lastHtml !== nextSummaryHtml) {
+        summary.dataset.lastHtml = nextSummaryHtml;
+        summary.innerHTML = nextSummaryHtml;
+      }
+      summary.onclick = CLICK_TARGET
+        ? () => {
+            if (/^https?:\\/\\//i.test(CLICK_TARGET)) {
+              window.open(CLICK_TARGET, '_blank', 'noopener,noreferrer');
+              return;
+            }
+            const u = new URL(location.href);
+            u.searchParams.set('tab', CLICK_TARGET);
+            history.pushState({}, '', u.toString());
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }
+        : null;
+    };
+
+    window.__agyRenderStats = (convId, d) => {
+      window.__agyStatsLastPush = Date.now();
+      const bar = ensureBar();
+      if (!bar) return;
+      const m = location.pathname.match(/\\/c\\/([a-zA-Z0-9_-]+)/);
+      if (!m || !convId || m[1] !== convId || !d) {
+        setPlainStatus(bar, L.waiting);
+        return;
+      }
+      renderData(bar, d);
+    };
+
     let inFlight = false;
     const refresh = async () => {
       if (inFlight) return;
@@ -226,6 +330,9 @@ export function buildStatsBarInjectJS(
         setPlainStatus(bar, L.waiting);
         return;
       }
+      if (window.__agyStatsLastPush && Date.now() - window.__agyStatsLastPush < 4000) {
+        return;
+      }
       inFlight = true;
       try {
         const res = await fetch('http://127.0.0.1:' + STATS_PORT + '/stats?id=' + encodeURIComponent(m[1]), {
@@ -233,102 +340,18 @@ export function buildStatsBarInjectJS(
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const d = await res.json();
-        const turns = Number(d.turns || 0);
-        const steps = Number(d.steps || 0);
-        const totalTokens = Number(d.totalTokens || 0);
-        const outputTokens = Number(d.outputTokens || 0);
-        const cacheHitRate = Number(d.cacheHitRate || 0);
-        const pct = Number(d.contextPct || 0);
-        const r = 5;
-        const c = 2 * Math.PI * r;
-        const offset = c - (pct / 100) * c;
-        const ringSvg =
-          '<svg width="14" height="14" viewBox="0 0 14 14" style="transform:rotate(-90deg);flex-shrink:0;">' +
-          '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="light-dark(rgba(10,10,12,0.16), rgba(255,255,255,0.18))" stroke-width="2"/>' +
-          '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="light-dark(rgba(10,10,12,0.72), rgba(255,255,255,0.78))" stroke-width="2" stroke-dasharray="' + c.toFixed(2) + '" stroke-dashoffset="' + offset.toFixed(2) + '" stroke-linecap="round"/>' +
-          '</svg>';
-        const gaugeSvg =
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
-          '<path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>';
-        const dbSvg =
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
-          '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>';
-        const liveBadge = formatLiveBadge(d.live);
-        const pop = document.getElementById('agy-stats-popover');
-        if (pop) {
-          const row = (k, v) =>
-            '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;">' +
-            '<span style="color:var(--muted-foreground,light-dark(#52525b,rgba(255,255,255,0.62)));">' + k + '</span>' +
-            '<span style="font-variant-numeric:tabular-nums;">' + v + '</span></div>';
-          let liveHtml = '';
-          if (liveBadge) {
-            const isErr = d.live && (d.live.phase === 'retry' || d.live.phase === 'error');
-            const detailText = liveBadge.detail || '';
-            const detailColor = isErr ? 'light-dark(#dc2626,rgba(248,113,113,0.9))' : 'var(--muted-foreground,light-dark(#52525b,rgba(255,255,255,0.65)))';
-            const detailLine = detailText
-              ? '<div style="margin-top:5px;font-size:11px;line-height:1.4;color:' + detailColor + ';word-break:break-word;">' + esc(detailText) + '</div>'
-              : '';
-            liveHtml =
-              '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border,light-dark(rgba(10,10,12,0.1),rgba(255,255,255,0.1)));">' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
-              '<span style="color:var(--muted-foreground,light-dark(#52525b,rgba(255,255,255,0.62)));flex-shrink:0;">' + L.liveTitle + '</span>' +
-              '<span style="color:' + liveBadge.color + ';font-weight:500;text-align:right;">' + esc(liveBadge.popText) + '</span></div>' +
-              detailLine + '</div>';
-          }
-          const nextPopHtml =
-            '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:6px;border-bottom:1px solid var(--border,light-dark(rgba(10,10,12,0.1),rgba(255,255,255,0.1)));font-weight:600;">' +
-            '<span style="display:inline-flex;align-items:center;gap:6px;">' + gaugeSvg + L.popTitle + '</span><span>' + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + '</span></div>' +
-            row(L.modelTime, formatDuration(d.modelSeconds)) +
-            row(L.tps, (d.tps || '--') + ' tok/s') +
-            row(L.outTok, formatTok(outputTokens)) +
-            row(L.totTok, formatTok(totalTokens)) +
-            row(L.cacheRate, cacheHitRate + '%') +
-            row(L.ctxUsage, formatTok(d.lastContextTokens || 0) + ' / ' + formatTok(d.maxContext || 512000) + ' (' + pct + '%)') +
-            liveHtml;
-          if (pop.dataset.lastHtml !== nextPopHtml) {
-            pop.dataset.lastHtml = nextPopHtml;
-            pop.innerHTML = nextPopHtml;
-          }
-        }
-        const summary = ensureSummary(bar);
-        const liveSpan =
-          '<span style="display:inline-flex;align-items:center;gap:6px;color:' + liveBadge.color + ';font-weight:' + (liveBadge.idle ? '400' : '500') + ';">' +
-          '<span style="width:6px;height:6px;border-radius:50%;background:' + liveBadge.dot + ';display:inline-block;"></span>' +
-          esc(liveBadge.barText) + '</span>';
-        const partMap = {
-          status: liveSpan,
-          turns: '<span style="display:inline-flex;align-items:center;gap:5px;">' + gaugeSvg + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + ' · ' + (d.tps || '--') + ' tok/s</span>',
-          tokens: '<span style="display:inline-flex;align-items:center;gap:5px;">' + dbSvg + formatTok(totalTokens) + ' tok · ' + L.cacheHit + ' ' + cacheHitRate + '%</span>',
-          context: '<span id="agy-context-trigger" style="display:inline-flex;align-items:center;gap:5px;">' + ringSvg + pct + '%</span>',
-        };
-        const sep = '<span style="opacity:0.35">|</span>';
-        const nextSummaryHtml = ITEMS.map((k) => partMap[k]).filter(Boolean).join(sep);
-        summary.style.cursor = CLICK_TARGET ? 'pointer' : 'default';
-        summary.title = CLICK_TARGET || '';
-        if (summary.dataset.lastHtml !== nextSummaryHtml) {
-          summary.dataset.lastHtml = nextSummaryHtml;
-          summary.innerHTML = nextSummaryHtml;
-        }
-        summary.onclick = CLICK_TARGET
-          ? () => {
-              if (/^https?:\\/\\//i.test(CLICK_TARGET)) {
-                window.open(CLICK_TARGET, '_blank', 'noopener,noreferrer');
-                return;
-              }
-              const u = new URL(location.href);
-              u.searchParams.set('tab', CLICK_TARGET);
-              history.pushState({}, '', u.toString());
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }
-          : null;
+        renderData(bar, d);
       } catch {
-        setPlainStatus(bar, L.disconnected);
+        if (!window.__agyStatsLastPush || Date.now() - window.__agyStatsLastPush >= 6000) {
+          setPlainStatus(bar, L.disconnected);
+        }
       } finally {
         inFlight = false;
       }
     };
 
-    refresh();
+    const initBar = ensureBar();
+    if (initBar) setPlainStatus(initBar, L.waiting);
     window.__agyStatsTimer = setInterval(refresh, 1000);
     return 'stats-ok';
   })()`;
@@ -340,12 +363,38 @@ export function buildStatsBarRemoveJS() {
       clearInterval(window.__agyStatsTimer);
       window.__agyStatsTimer = null;
     }
+    window.__agyRenderStats = null;
+    window.__agyStatsLastPush = 0;
     window.__agyStatsPort = null;
     window.__agyStatsVersion = null;
     const bar = document.getElementById('agy-stats-bar');
     if (bar) bar.remove();
     return 'stats-removed';
   })()`;
+}
+
+export async function pushStatsToPage(wsUrl) {
+  try {
+    const check = await evalOverCDP(
+      wsUrl,
+      `(() => {
+        const m = location.pathname.match(/\\/c\\/([a-zA-Z0-9_-]+)/);
+        return m ? m[1] : '';
+      })()`
+    );
+    const convId = check?.result?.value || '';
+    const data = convId ? computeConversationStats(convId) : null;
+    await evalOverCDP(
+      wsUrl,
+      `(() => {
+        if (typeof window.__agyRenderStats === 'function') {
+          window.__agyRenderStats(${JSON.stringify(convId)}, ${JSON.stringify(data)});
+        }
+      })()`
+    );
+  } catch {
+    // ignore transient CDP error
+  }
 }
 
 const WIN_MEDIA_MODAL_CSS =
@@ -572,6 +621,9 @@ export async function applyConfig(rawCfg, logFn = console.log, opts = {}) {
 
   for (const page of pages) {
     await evalOverCDP(page.webSocketDebuggerUrl, expression);
+    if (cfg.enableStatsBar) {
+      await pushStatsToPage(page.webSocketDebuggerUrl);
+    }
   }
 
   return pages.length;
