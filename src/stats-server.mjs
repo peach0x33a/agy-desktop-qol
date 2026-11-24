@@ -7,11 +7,31 @@ import { computeConversationStats } from './transcript.mjs';
 
 export const TOKEN_PATH = path.join(DATA_DIR, 'qol-stats-token');
 export const PORT_PATH = path.join(DATA_DIR, 'qol-stats-port');
+export const PID_LOCK_PATH = path.join(DATA_DIR, 'qol-daemon.pid');
 
 let activeStatsPort = null;
 let activeStatsServer = null;
 let statsServerPromise = null;
 let cachedToken = null;
+
+export function claimSingleInstanceLock(pidPath = PID_LOCK_PATH) {
+  try {
+    fs.mkdirSync(path.dirname(pidPath), { recursive: true });
+    fs.writeFileSync(pidPath, String(process.pid), 'utf8');
+  } catch {
+    // ignore
+  }
+}
+
+export function isCurrentInstanceOwner(pidPath = PID_LOCK_PATH) {
+  try {
+    if (!fs.existsSync(pidPath)) return true;
+    const ownerPid = Number(fs.readFileSync(pidPath, 'utf8').trim());
+    return !ownerPid || ownerPid === process.pid;
+  } catch {
+    return true;
+  }
+}
 
 export function getActiveStatsPort() {
   return activeStatsPort;
@@ -94,7 +114,10 @@ export function createStatsRequestHandler(opts = {}) {
       const rawUrl = typeof req.url === 'string' ? req.url : '/';
       const url = new URL(rawUrl, `http://127.0.0.1:${getPort()}`);
 
-      if (req.method === 'GET' && (url.pathname === '/stats' || url.pathname === '/health')) {
+      if (
+        (req.method === 'GET' && (url.pathname === '/stats' || url.pathname === '/health')) ||
+        (req.method === 'POST' && url.pathname === '/shutdown')
+      ) {
         const expected = getToken();
         const headerToken = req.headers['x-qol-token'];
         const provided =
@@ -105,6 +128,24 @@ export function createStatsRequestHandler(opts = {}) {
         if (!verifyStatsToken(provided, expected)) {
           res.statusCode = 403;
           res.end('{}');
+          return;
+        }
+
+        if (req.method === 'POST' && url.pathname === '/shutdown') {
+          res.statusCode = 200;
+          res.end(JSON.stringify({ ok: true }));
+          if (typeof opts.onShutdown === 'function') {
+            opts.onShutdown();
+          } else {
+            setTimeout(() => {
+              try {
+                activeStatsServer?.close();
+              } catch {
+                // ignore
+              }
+              process.exit(0);
+            }, 50).unref();
+          }
           return;
         }
 
@@ -148,9 +189,16 @@ export function ensureStatsServer(preferredPort = PREFERRED_STATS_PORT) {
   if (activeStatsPort !== null) return Promise.resolve(activeStatsPort);
   if (statsServerPromise) return statsServerPromise;
 
+  claimSingleInstanceLock();
+
   statsServerPromise = new Promise((resolve, reject) => {
     const server = http.createServer(createStatsRequestHandler());
+    const initialPort =
+      Number.isInteger(preferredPort) && preferredPort >= 0 && preferredPort <= 65535
+        ? preferredPort
+        : 9223;
 
+    let triedTakeover = false;
     let triedFallback = false;
     const onListening = () => {
       server.off('error', onStartupError);
@@ -165,6 +213,21 @@ export function ensureStatsServer(preferredPort = PREFERRED_STATS_PORT) {
     };
 
     const onStartupError = (err) => {
+      if (err && err.code === 'EADDRINUSE' && !triedTakeover && initialPort > 0) {
+        triedTakeover = true;
+        fetch(`http://127.0.0.1:${initialPort}/shutdown`, {
+          method: 'POST',
+          headers: { 'X-QoL-Token': getStatsToken() },
+          signal: AbortSignal.timeout(500),
+        })
+          .catch(() => {})
+          .finally(() => {
+            setTimeout(() => {
+              server.listen(initialPort, '127.0.0.1');
+            }, 150);
+          });
+        return;
+      }
       if (err && err.code === 'EADDRINUSE' && !triedFallback) {
         triedFallback = true;
         console.error(`[info] 统计端口 ${preferredPort} 已被占用，正在分配随机可用端口...`);
@@ -178,10 +241,6 @@ export function ensureStatsServer(preferredPort = PREFERRED_STATS_PORT) {
 
     server.once('listening', onListening);
     server.on('error', onStartupError);
-    const initialPort =
-      Number.isInteger(preferredPort) && preferredPort >= 0 && preferredPort <= 65535
-        ? preferredPort
-        : 9223;
     server.listen(initialPort, '127.0.0.1');
   });
 

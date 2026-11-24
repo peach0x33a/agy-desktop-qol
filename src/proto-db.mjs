@@ -62,7 +62,7 @@ export function decodeProtoTimestamp(bytes) {
   }
 }
 
-const KNOWN_PROTO_VERSIONS = ['2.33'];
+const KNOWN_PROTO_VERSIONS = ['2.33', '2.34'];
 let hostVersionCache = { version: null, at: 0, port: null };
 
 export function refreshHostVersion(cdpPort) {
@@ -102,14 +102,16 @@ export function getDbFingerprint(dbPath) {
   }
 }
 
-function getConversationsDir(customDir) {
-  return customDir || path.join(os.homedir(), '.gemini', 'antigravity', 'conversations');
+function getConversationsDir(customDir, homeDir) {
+  return customDir || path.join(homeDir || os.homedir(), '.gemini', 'antigravity', 'conversations');
 }
 
 // 从 .db 的 steps.metadata 读取精确流式耗时:
 // f1=请求开始, f6=首token时间(TTFT结束), f7=生成完成, f9.f3=output_tokens
 export function readDbTimingStats(convId, opts = {}) {
-  const dbPath = path.join(getConversationsDir(opts.conversationsDir), `${convId}.db`);
+  const dbPath = path.join(getConversationsDir(opts.conversationsDir, opts.homeDir), `${convId}.db`);
+  // 跨 WSL2 UNC 路径 (\\wsl.localhost\...) 不直接打开 SQLite WAL 数据库，避免跨内核文件锁冲突，直接回退为 transcript 时间戳推算
+  if (dbPath.startsWith('\\\\')) return null;
   const fp = getDbFingerprint(dbPath);
   if (!fp || !nodeSqlite) return null;
   const hit = dbTimingCache.get(convId);
@@ -173,7 +175,8 @@ export function readDbTimingStats(convId, opts = {}) {
 export function readDbMaxTokenLimit(convId, opts = {}) {
   refreshHostVersion(opts.cdpPort);
   const known = isKnownProtoVersion();
-  const dbPath = path.join(getConversationsDir(opts.conversationsDir), `${convId}.db`);
+  const dbPath = path.join(getConversationsDir(opts.conversationsDir, opts.homeDir), `${convId}.db`);
+  if (dbPath.startsWith('\\\\')) return 0;
   const fp = getDbFingerprint(dbPath);
   if (!fp || !nodeSqlite) return 0;
   const hit = dbLimitCache.get(convId);

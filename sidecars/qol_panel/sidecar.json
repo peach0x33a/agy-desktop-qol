@@ -1,5 +1,5 @@
 {
-  "command": "node",
+  "command": "./run-sidecar",
   "args": ["main.mjs"],
   "restart_policy": "always",
   "display_name": "Desktop QoL",

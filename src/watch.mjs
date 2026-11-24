@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import {
   STATS_BAR_VERSION,
   UI_STYLE_ID,
@@ -6,8 +7,74 @@ import {
   loadConfig,
 } from './config.mjs';
 import { evalOverCDP, getTargets, isInjectablePage } from './cdp.mjs';
-import { applyConfig } from './inject.mjs';
-import { ensureStatsServer, getActiveStatsPort } from './stats-server.mjs';
+import { applyConfig, pushStatsToPage } from './inject.mjs';
+import {
+  PID_LOCK_PATH,
+  claimSingleInstanceLock,
+  ensureStatsServer,
+  getActiveStatsPort,
+  isCurrentInstanceOwner,
+} from './stats-server.mjs';
+
+function isPidAlive(pid) {
+  if (!pid || pid <= 1) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return Boolean(err && err.code === 'EPERM');
+  }
+}
+
+export function startLifecycleGuard(intervalMs = 3000) {
+  claimSingleInstanceLock();
+  const parentPid = process.ppid;
+  let idleConfirmCount = 0;
+
+  const timer = setInterval(async () => {
+    try {
+      if (!isCurrentInstanceOwner()) {
+        process.exit(0);
+      }
+
+      const parentAlive =
+        parentPid > 1 &&
+        (process.platform === 'win32' || process.ppid === parentPid) &&
+        isPidAlive(parentPid);
+
+      let anyWindowOpen = false;
+      try {
+        const cfg = loadConfig();
+        const targets = await getTargets(getCdpPort(cfg));
+        anyWindowOpen = Array.isArray(targets) && targets.some(isInjectablePage);
+      } catch {
+        anyWindowOpen = false;
+      }
+
+      if (parentAlive || anyWindowOpen) {
+        idleConfirmCount = 0;
+        return;
+      }
+
+      idleConfirmCount++;
+      if (idleConfirmCount >= 2) {
+        try {
+          if (isCurrentInstanceOwner() && fs.existsSync(PID_LOCK_PATH)) {
+            fs.unlinkSync(PID_LOCK_PATH);
+          }
+        } catch {
+          // ignore
+        }
+        process.exit(0);
+      }
+    } catch {
+      // ignore transient error
+    }
+  }, intervalMs);
+
+  timer.unref();
+  return timer;
+}
 
 export function buildNeedInjectExpression(cfg, activeStatsPort) {
   const checks = [];
@@ -19,6 +86,7 @@ export function buildNeedInjectExpression(cfg, activeStatsPort) {
   }
   if (cfg.enableStatsBar) {
     checks.push('!window.__agyStatsTimer');
+    checks.push("typeof window.__agyRenderStats !== 'function'");
     checks.push(`window.__agyStatsVersion !== ${STATS_BAR_VERSION}`);
     if (activeStatsPort) {
       checks.push(`window.__agyStatsPort !== ${Number(activeStatsPort)}`);
@@ -30,7 +98,7 @@ export function buildNeedInjectExpression(cfg, activeStatsPort) {
   return checks.length > 0 ? checks.join(' || ') : 'false';
 }
 
-export function startWatchLoop(intervalMs = 3000) {
+export function startWatchLoop(intervalMs = 1000) {
   ensureStatsServer().catch((err) => {
     console.error('[warn] 统计服务启动失败:', err && err.message);
   });
@@ -61,6 +129,7 @@ export function startWatchLoop(intervalMs = 3000) {
       const checkExpr = buildNeedInjectExpression(currentCfg, statsPort);
       if (checkExpr === 'false') return;
 
+      let injected = false;
       for (const page of pages) {
         const check = await evalOverCDP(page.webSocketDebuggerUrl, checkExpr);
         if (check && check.result && check.result.value === true) {
@@ -70,7 +139,14 @@ export function startWatchLoop(intervalMs = 3000) {
             tolerantWallpaper: true,
             statsPort,
           });
+          injected = true;
           break;
+        }
+      }
+
+      if (!injected && currentCfg.enableStatsBar) {
+        for (const page of pages) {
+          await pushStatsToPage(page.webSocketDebuggerUrl);
         }
       }
     } catch {

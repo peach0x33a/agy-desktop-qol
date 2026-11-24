@@ -1,0 +1,18 @@
+#!/bin/sh
+if command -v node >/dev/null 2>&1; then
+  exec node "$@"
+fi
+for p in \
+  "/opt/homebrew/bin/node" \
+  "/usr/local/bin/node" \
+  "$HOME/.nvm/current/bin/node" \
+  "$HOME/.volta/bin/node" \
+  "$HOME/.fnm/current/bin/node" \
+  "$HOME/Library/Application Support/Antigravity/bin/agy-node" \
+  "$HOME/.config/Antigravity/bin/agy-node"; do
+  if [ -x "$p" ]; then
+    exec "$p" "$@"
+  fi
+done
+echo "[error] Node.js runtime not found" >&2
+exit 1

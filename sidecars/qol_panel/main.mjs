@@ -10,6 +10,7 @@ import {
   normalizePort,
   normalizeStatsBarItems,
   saveConfig,
+  startLifecycleGuard,
   startWatchLoop,
 } from '../../agy-desktop-qol.mjs';
 
@@ -30,23 +31,11 @@ const { SidecarApp, Response } = await import('sidecar_sdk').catch(() => import(
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-// 父进程退出时自动清理自身，避免重启 Antigravity 后残留旧进程占用端口并覆盖注入
-const parentPid = process.ppid;
-if (parentPid && parentPid > 1) {
-  setInterval(() => {
-    try {
-      if (process.platform !== 'win32' && process.ppid !== parentPid) {
-        process.exit(0);
-      }
-      process.kill(parentPid, 0);
-    } catch {
-      process.exit(0);
-    }
-  }, 3000).unref();
-}
+// 生命周期与单实例守护：父进程或任意 Antigravity 窗口 (含 SSH 窗口) 在线时保持运行，全部关闭或被新实例接管时立即退出
+startLifecycleGuard(3000);
 
-// 在 Sidecar 后台进程内直接托管统计服务与 CDP 自动注入守护
-startWatchLoop(3000);
+// 在 Sidecar 后台进程内直接托管统计服务与 CDP 自动注入/直推守护
+startWatchLoop(1000);
 
 const app = new SidecarApp();
 
