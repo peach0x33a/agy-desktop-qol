@@ -47,7 +47,7 @@ export const DEFAULT_CDP_PORT = normalizePort(process.env.AGY_CDP_PORT, 9222);
 export const PREFERRED_STATS_PORT = normalizePort(process.env.AGY_STATS_PORT, 9223);
 export const WALLPAPER_STYLE_ID = 'agy-custom-wallpaper';
 export const UI_STYLE_ID = 'agy-clean-ui';
-export const STATS_BAR_VERSION = 3;
+export const STATS_BAR_VERSION = 4;
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -127,6 +127,7 @@ export const I18N = {
       outTok: '输出 Token',
       totTok: '总 Token',
       cacheRate: '缓存命中率',
+      lastTurn: '本轮',
       ctxUsage: '上下文占用',
       min: '分',
       sec: '秒',
@@ -189,6 +190,7 @@ export const I18N = {
       outTok: 'Output Tokens',
       totTok: 'Total Tokens',
       cacheRate: 'Cache Hit Rate',
+      lastTurn: 'last',
       ctxUsage: 'Context Usage',
       min: 'm',
       sec: 's',

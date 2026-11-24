@@ -12,6 +12,7 @@ import {
 import {
   clearTranscriptCache,
   computeConversationStats,
+  inferContextLimit,
   readTranscriptIncremental,
 } from '../src/transcript.mjs';
 
@@ -169,5 +170,71 @@ test('getLanguageServerLogPath discovers newest remote server ls-*.log in .antig
     assert.equal(getLanguageServerLogPath(tmpHome), newerLog);
   } finally {
     fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('CHECKPOINT immediately drops lastContextTokens and lastCacheHitRate tracks latest turn', () => {
+  clearTranscriptCache();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-qol-cp-'));
+  const convId = 'conv-checkpoint-test';
+  const logsDir = path.join(tmpDir, convId, '.system_generated', 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
+  const trPath = path.join(logsDir, 'transcript.jsonl');
+
+  try {
+    const lines = [
+      JSON.stringify({
+        type: 'USER_INPUT',
+        created_at: '2026-11-24T10:00:00.000Z',
+        content: 'hello',
+      }),
+      JSON.stringify({
+        type: 'PLANNER_RESPONSE',
+        created_at: '2026-11-24T10:00:01.000Z',
+        model: 'gemini-4-neon-medium',
+        input_tokens: 10000,
+        cache_read_tokens: 0,
+        output_tokens: 500,
+      }),
+      JSON.stringify({
+        type: 'PLANNER_RESPONSE',
+        created_at: '2026-11-24T10:00:05.000Z',
+        model: 'gemini-4-neon-medium',
+        input_tokens: 1000,
+        cache_read_tokens: 9000,
+        output_tokens: 500,
+      }),
+      JSON.stringify({
+        type: 'CHECKPOINT',
+        created_at: '2026-11-24T10:00:10.000Z',
+        output_tokens: 1200,
+        content: 'summary',
+      }),
+    ];
+    fs.writeFileSync(trPath, lines.join('\n') + '\n', 'utf8');
+
+    const stats = computeConversationStats(convId, {
+      brainDir: tmpDir,
+      conversationsDir: tmpDir,
+      lsLogPath: path.join(tmpDir, 'nonexistent.log'),
+      nowMs: Date.parse('2026-11-24T10:00:15.000Z'),
+    });
+    assert.equal(stats.lastContextTokens, 1200);
+    assert.equal(stats.cacheHitRate, 45);
+    assert.equal(stats.lastCacheHitRate, 90);
+    assert.equal(stats.maxContext, 512000);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('inferContextLimit fallback matches Antigravity 2.34 model limits before executor_metadata is written', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-qol-lim-'));
+  try {
+    assert.equal(inferContextLimit('gemini-4-neon-medium', 'missing-conv', { conversationsDir: tmpDir }), 512000);
+    assert.equal(inferContextLimit('claude-sonnet-5-5-low', 'missing-conv', { conversationsDir: tmpDir }), 840000);
+    assert.equal(inferContextLimit('gpt-oss-120b-medium', 'missing-conv', { conversationsDir: tmpDir }), 131072);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });

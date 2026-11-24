@@ -79,48 +79,32 @@ export function getCandidateHomeDirs() {
   return dirs;
 }
 
+function hasConvTranscript(home, convId) {
+  const logsDir = path.join(home, '.gemini', 'antigravity', 'brain', convId, '.system_generated', 'logs');
+  try {
+    return (
+      fs.existsSync(path.join(logsDir, 'transcript.jsonl')) ||
+      fs.existsSync(path.join(logsDir, 'transcript_full.jsonl'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 const convHomeCache = new Map();
 export function resolveConvHomeDir(convId) {
   const cached = convHomeCache.get(convId);
   if (cached) {
-    const tr = path.join(
-      cached,
-      '.gemini',
-      'antigravity',
-      'brain',
-      convId,
-      '.system_generated',
-      'logs',
-      'transcript.jsonl'
-    );
-    try {
-      if (fs.existsSync(tr)) return cached;
-    } catch {
-      // invalidate below
-    }
+    if (hasConvTranscript(cached, convId)) return cached;
     convHomeCache.delete(convId);
   }
   for (const home of getCandidateHomeDirs()) {
-    const tr = path.join(
-      home,
-      '.gemini',
-      'antigravity',
-      'brain',
-      convId,
-      '.system_generated',
-      'logs',
-      'transcript.jsonl'
-    );
-    try {
-      if (fs.existsSync(tr)) {
-        convHomeCache.set(convId, home);
-        if (convHomeCache.size > 100) {
-          convHomeCache.delete(convHomeCache.keys().next().value);
-        }
-        return home;
+    if (hasConvTranscript(home, convId)) {
+      convHomeCache.set(convId, home);
+      if (convHomeCache.size > 100) {
+        convHomeCache.delete(convHomeCache.keys().next().value);
       }
-    } catch {
-      // ignore
+      return home;
     }
   }
   return os.homedir();
@@ -128,6 +112,9 @@ export function resolveConvHomeDir(convId) {
 
 export function getLanguageServerLogPath(homeDir) {
   const home = homeDir || os.homedir();
+  const isLocalHome = home === os.homedir();
+
+  let newestHub = null;
   const hubLogDir = path.join(home, '.antigravity-hub-server', 'data');
   try {
     if (fs.existsSync(hubLogDir)) {
@@ -144,15 +131,16 @@ export function getLanguageServerLogPath(homeDir) {
         })
         .filter((x) => x.mtimeMs > 0)
         .sort((a, b) => b.mtimeMs - a.mtimeMs);
-      if (files.length > 0) return files[0].full;
+      if (files.length > 0) newestHub = files[0];
     }
   } catch {
     // ignore
   }
+
   const candidates =
     process.platform === 'darwin'
       ? [path.join(home, 'Library', 'Logs', 'Antigravity', 'language_server.log')]
-      : process.platform === 'win32' && home === os.homedir()
+      : process.platform === 'win32' && isLocalHome
         ? [
             path.join(process.env.APPDATA || '', 'Antigravity', 'logs', 'language_server.log'),
             path.join(process.env.LOCALAPPDATA || '', 'Antigravity', 'logs', 'language_server.log'),
@@ -163,7 +151,29 @@ export function getLanguageServerLogPath(homeDir) {
             path.join(home, 'AppData', 'Roaming', 'Antigravity', 'logs', 'language_server.log'),
             path.join(home, 'AppData', 'Local', 'Antigravity', 'logs', 'language_server.log'),
           ];
-  return candidates.find((p) => p && fs.existsSync(p)) || null;
+
+  let newestDesktop = null;
+  for (const p of candidates) {
+    if (!p) continue;
+    try {
+      if (fs.existsSync(p)) {
+        const mtimeMs = fs.statSync(p).mtimeMs;
+        if (!newestDesktop || mtimeMs > newestDesktop.mtimeMs) {
+          newestDesktop = { full: p, mtimeMs };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!isLocalHome) {
+    return newestHub?.full || newestDesktop?.full || null;
+  }
+  if (newestHub && newestDesktop) {
+    return newestHub.mtimeMs > newestDesktop.mtimeMs ? newestHub.full : newestDesktop.full;
+  }
+  return newestDesktop?.full || newestHub?.full || null;
 }
 
 export function readLogTail(filePath, maxBytes = 24576) {

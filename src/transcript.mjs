@@ -15,6 +15,7 @@ export function newTranscriptState() {
     cacheReadTokens: 0,
     outputTokens: 0,
     lastContextTokens: 0,
+    lastCacheHitRate: 0,
     lastModel: '',
     modelMs: 0,
     pendingTs: null,
@@ -79,6 +80,15 @@ export function readTranscriptIncremental(convId, logPath) {
             if (stepCtx > 0) {
               st.lastContextTokens = stepCtx;
             }
+            if (stepIn + stepCache > 0) {
+              st.lastCacheHitRate = Math.round((stepCache / (stepIn + stepCache)) * 100);
+            }
+          } else if (obj.type === 'CHECKPOINT') {
+            const cpOut = Number(obj.output_tokens || 0);
+            const cpEst = cpOut > 0 ? cpOut : Math.ceil(String(obj.content || '').length / 3.8);
+            if (cpEst > 0) {
+              st.lastContextTokens = cpEst;
+            }
           }
           // PLANNER_RESPONSE 的 created_at 是该步开始时间; 紧随其后的工具步骤 (GENERIC) 在生成结束时创建，
           // 因此 (工具步骤时间 - 本步时间) 即纯生成耗时，不含工具执行时间。
@@ -139,6 +149,13 @@ export function inferContextLimit(model, convId, opts = {}) {
     .toLowerCase()
     .replace(/\s+/g, '-');
   if (id.includes('orchestrator')) return 512000;
+  if (/^gemini-4(?:$|-)/.test(id)) return 512000;
+  if (
+    /^claude-(?:sonnet|opus|haiku)-5(?:$|-)/.test(id) ||
+    /^claude-(?:sonnet|opus)-4-(?:6|7|8)(?:$|-)/.test(id)
+  ) {
+    return 840000;
+  }
   let modelMax = 1048576;
   if (/gpt-oss-120b/.test(id)) modelMax = 131072;
   else if (/claude-(sonnet|opus|haiku)-4-5|claude-(sonnet|opus)-4(-|$)/.test(id)) {
@@ -289,6 +306,7 @@ export function computeConversationStats(convId, opts = {}) {
     totalTokens,
     outputTokens,
     cacheHitRate,
+    lastCacheHitRate: st.lastCacheHitRate,
     tps,
     contextPct,
     modelSeconds: Math.round(effectiveModelMs / 1000),

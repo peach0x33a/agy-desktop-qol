@@ -26,14 +26,18 @@ function isPidAlive(pid) {
   }
 }
 
-export function startLifecycleGuard(intervalMs = 3000) {
-  claimSingleInstanceLock();
+export function startLifecycleGuard(intervalMs = 3000, opts = {}) {
+  const singleInstance = Boolean(opts.singleInstance);
+  const exitOnParentExit = Boolean(opts.exitOnParentExit);
+  if (singleInstance) {
+    claimSingleInstanceLock();
+  }
   const parentPid = process.ppid;
   let idleConfirmCount = 0;
 
   const timer = setInterval(async () => {
     try {
-      if (!isCurrentInstanceOwner()) {
+      if (singleInstance && !isCurrentInstanceOwner()) {
         process.exit(0);
       }
 
@@ -41,6 +45,10 @@ export function startLifecycleGuard(intervalMs = 3000) {
         parentPid > 1 &&
         (process.platform === 'win32' || process.ppid === parentPid) &&
         isPidAlive(parentPid);
+
+      if (exitOnParentExit && parentPid > 1 && !parentAlive) {
+        process.exit(0);
+      }
 
       let anyWindowOpen = false;
       try {
@@ -58,12 +66,14 @@ export function startLifecycleGuard(intervalMs = 3000) {
 
       idleConfirmCount++;
       if (idleConfirmCount >= 2) {
-        try {
-          if (isCurrentInstanceOwner() && fs.existsSync(PID_LOCK_PATH)) {
-            fs.unlinkSync(PID_LOCK_PATH);
+        if (singleInstance) {
+          try {
+            if (isCurrentInstanceOwner() && fs.existsSync(PID_LOCK_PATH)) {
+              fs.unlinkSync(PID_LOCK_PATH);
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
         process.exit(0);
       }
@@ -98,8 +108,9 @@ export function buildNeedInjectExpression(cfg, activeStatsPort) {
   return checks.length > 0 ? checks.join(' || ') : 'false';
 }
 
-export function startWatchLoop(intervalMs = 1000) {
-  ensureStatsServer().catch((err) => {
+export function startWatchLoop(intervalMs = 1000, opts = {}) {
+  const takeover = Boolean(opts.takeover);
+  ensureStatsServer(undefined, { takeover }).catch((err) => {
     console.error('[warn] 统计服务启动失败:', err && err.message);
   });
 
@@ -121,7 +132,7 @@ export function startWatchLoop(intervalMs = 1000) {
         return;
       }
       const statsPort = currentCfg.enableStatsBar
-        ? getActiveStatsPort() || (await ensureStatsServer())
+        ? getActiveStatsPort() || (await ensureStatsServer(undefined, { takeover }))
         : null;
       const targets = await getTargets(getCdpPort(currentCfg));
       if (!targets) return;

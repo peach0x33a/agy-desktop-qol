@@ -31,11 +31,11 @@ const { SidecarApp, Response } = await import('sidecar_sdk').catch(() => import(
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-// 生命周期与单实例守护：父进程或任意 Antigravity 窗口 (含 SSH 窗口) 在线时保持运行，全部关闭或被新实例接管时立即退出
-startLifecycleGuard(3000);
+// 生命周期守护：随宿主父进程退出而退出，不抢占其他 Antigravity 实例的 Sidecar 端口
+startLifecycleGuard(3000, { singleInstance: false, exitOnParentExit: true });
 
 // 在 Sidecar 后台进程内直接托管统计服务与 CDP 自动注入/直推守护
-startWatchLoop(1000);
+startWatchLoop(1000, { takeover: false });
 
 const app = new SidecarApp();
 

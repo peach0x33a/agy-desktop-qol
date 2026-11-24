@@ -185,11 +185,14 @@ export function createStatsRequestHandler(opts = {}) {
   };
 }
 
-export function ensureStatsServer(preferredPort = PREFERRED_STATS_PORT) {
+export function ensureStatsServer(preferredPort = PREFERRED_STATS_PORT, opts = {}) {
   if (activeStatsPort !== null) return Promise.resolve(activeStatsPort);
   if (statsServerPromise) return statsServerPromise;
 
-  claimSingleInstanceLock();
+  const takeover = Boolean(opts.takeover);
+  if (takeover) {
+    claimSingleInstanceLock();
+  }
 
   statsServerPromise = new Promise((resolve, reject) => {
     const server = http.createServer(createStatsRequestHandler());
@@ -213,7 +216,7 @@ export function ensureStatsServer(preferredPort = PREFERRED_STATS_PORT) {
     };
 
     const onStartupError = (err) => {
-      if (err && err.code === 'EADDRINUSE' && !triedTakeover && initialPort > 0) {
+      if (takeover && err && err.code === 'EADDRINUSE' && !triedTakeover && initialPort > 0) {
         triedTakeover = true;
         fetch(`http://127.0.0.1:${initialPort}/shutdown`, {
           method: 'POST',

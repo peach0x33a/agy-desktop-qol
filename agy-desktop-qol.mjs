@@ -55,8 +55,8 @@ async function main() {
 
   const arg1 = process.argv[2];
   if (arg1 === '--watch') {
-    startLifecycleGuard(3000);
-    startWatchLoop(1000);
+    startLifecycleGuard(3000, { singleInstance: true, exitOnParentExit: false });
+    startWatchLoop(1000, { takeover: true });
     return;
   }
   if (!arg1) {

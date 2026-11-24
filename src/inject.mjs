@@ -260,6 +260,10 @@ export function buildStatsBarInjectJS(
             '<span style="color:' + liveBadge.color + ';font-weight:500;text-align:right;">' + esc(liveBadge.popText) + '</span></div>' +
             detailLine + '</div>';
         }
+        const cacheRateText =
+          steps > 1 && d.lastCacheHitRate != null
+            ? cacheHitRate + '% (' + L.lastTurn + ' ' + Number(d.lastCacheHitRate || 0) + '%)'
+            : cacheHitRate + '%';
         const nextPopHtml =
           '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:6px;border-bottom:1px solid var(--border,light-dark(rgba(10,10,12,0.1),rgba(255,255,255,0.1)));font-weight:600;">' +
           '<span style="display:inline-flex;align-items:center;gap:6px;">' + gaugeSvg + L.popTitle + '</span><span>' + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + '</span></div>' +
@@ -267,7 +271,7 @@ export function buildStatsBarInjectJS(
           row(L.tps, (d.tps || '--') + ' tok/s') +
           row(L.outTok, formatTok(outputTokens)) +
           row(L.totTok, formatTok(totalTokens)) +
-          row(L.cacheRate, cacheHitRate + '%') +
+          row(L.cacheRate, cacheRateText) +
           row(L.ctxUsage, formatTok(d.lastContextTokens || 0) + ' / ' + formatTok(d.maxContext || 512000) + ' (' + pct + '%)') +
           liveHtml;
         if (pop.dataset.lastHtml !== nextPopHtml) {
@@ -473,7 +477,9 @@ export function buildStatsBarRemoveJS() {
   })()`;
 }
 
-export async function pushStatsToPage(wsUrl) {
+const lastPushedByWs = new Map();
+
+export async function pushStatsToPage(wsUrl, opts = {}) {
   try {
     const check = await evalOverCDP(
       wsUrl,
@@ -484,14 +490,23 @@ export async function pushStatsToPage(wsUrl) {
     );
     const convId = check?.result?.value || '';
     const data = convId ? computeConversationStats(convId) : null;
+    const payload = JSON.stringify(data);
+    const prev = lastPushedByWs.get(wsUrl);
+    if (!opts.force && prev && prev.convId === convId && prev.payload === payload) {
+      return;
+    }
     await evalOverCDP(
       wsUrl,
       `(() => {
         if (typeof window.__agyRenderStats === 'function') {
-          window.__agyRenderStats(${JSON.stringify(convId)}, ${JSON.stringify(data)});
+          window.__agyRenderStats(${JSON.stringify(convId)}, ${payload});
         }
       })()`
     );
+    lastPushedByWs.set(wsUrl, { convId, payload });
+    if (lastPushedByWs.size > 50) {
+      lastPushedByWs.delete(lastPushedByWs.keys().next().value);
+    }
   } catch {
     // ignore transient CDP error
   }
@@ -722,7 +737,7 @@ export async function applyConfig(rawCfg, logFn = console.log, opts = {}) {
   for (const page of pages) {
     await evalOverCDP(page.webSocketDebuggerUrl, expression);
     if (cfg.enableStatsBar) {
-      await pushStatsToPage(page.webSocketDebuggerUrl);
+      await pushStatsToPage(page.webSocketDebuggerUrl, { force: true });
     }
   }
 
