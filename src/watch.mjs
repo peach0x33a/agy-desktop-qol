@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import {
+  ESC_CANCEL_VERSION,
   STATS_BAR_VERSION,
   UI_STYLE_ID,
+  UI_STYLE_VERSION,
   WALLPAPER_STYLE_ID,
   getCdpPort,
   loadConfig,
@@ -93,6 +95,9 @@ export function buildNeedInjectExpression(cfg, activeStatsPort) {
   }
   if (cfg.enableInputStyle) {
     checks.push(`!document.getElementById(${JSON.stringify(UI_STYLE_ID)})`);
+    checks.push(
+      `document.getElementById(${JSON.stringify(UI_STYLE_ID)})?.dataset?.agyVersion !== ${JSON.stringify(String(UI_STYLE_VERSION))}`
+    );
   }
   if (cfg.enableStatsBar) {
     checks.push('!window.__agyStatsTimer');
@@ -104,6 +109,7 @@ export function buildNeedInjectExpression(cfg, activeStatsPort) {
   }
   if (cfg.enableEscCancel) {
     checks.push('!window.__agyEscCancelHandler');
+    checks.push(`window.__agyEscCancelVersion !== ${ESC_CANCEL_VERSION}`);
   }
   return checks.length > 0 ? checks.join(' || ') : 'false';
 }

@@ -1,66 +1,70 @@
 # agy-desktop-qol
 
-**简体中文** | [English](./README_EN.md)
+[简体中文](./README_ZH.md) | **English**
 
-> 零第三方依赖、跨平台的 **Antigravity Desktop** 体验增强插件（基于 CDP 动态注入 + 原生 Sidecar 设置面板）。
+> Zero-dependency, cross-platform Quality-of-Life (QoL) enhancer & native Sidecar plugin for **Antigravity Desktop** via Chrome DevTools Protocol (CDP), modifying zero application files.
 
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)](#)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-brightgreen)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 ---
 
-## ✨ 功能特性
+## ✨ Features
 
-- **🎨 自定义背景注入（本地 & URL）**：支持本地图片路径（含 `~/...`）、`https://` 远程图片链接或 `data:image/...` 作为半透明氛围背景层（支持滑块实时调节透明度，默认 `0.12`，上限 `10MB`）。远程图片由 Node 端流式拉取并转为 `base64` 注入，规避桌面端 CSP 限制。
-- **🪄 样式扁平化**：全局去除多层阴影/发光叠加，为输入框、弹窗、菜单统一加上 `1px` 极简细边框。
-- **📊 底部会话统计栏 & 实时内部状态**：在输入框下方居中展示（支持按需勾选 `status` / `turns` / `tokens` / `context` 显示项）：
-  - **等宽 4 字实时状态**：解析本地 `transcript.jsonl` 与 `language_server.log`，直观显示当前内部阶段且不抖动（`空闲状态` / `等待响应` / `接收响应` / `执行工具` / `安全检查` / `容量不足` / `重试请求` / `请求出错`）。
-  - **轮数 / 步数 / 速度**：`X 轮 Y 步` 与平均输出速度（`tok/s`）。
-  - **Token 与缓存命中**：总 Token 消耗与 Prompt 缓存命中率（`缓存命中 XX%`）。
-  - **上下文占用圆环**：优先从本地 SQLite `.db`（Protobuf 元数据）或 `.pbtxt` 读取精确 `max_token_limit` 绘制百分比圆环。
-  - **可交互悬停弹窗**：鼠标移入可查看模型耗时、正在执行的工具名、重试次数与 503 报错详情（支持直接划选复制）。
-  - **点击跳转地址可配**：点击状态栏可打开任意 Sidecar 面板（默认跳转到 `sidecar__context/context_panel__/`）或外部链接。
-- **⎋ 双击 ESC 取消对话**：生成过程中 2 秒内连按两次 `ESC`（带对话区居中毛玻璃二次确认 Toast）即可快速停止生成；长按连发、输入法选词或弹窗/下拉菜单打开时不误触。
-- **🎛️ 原生 Sidecar 设置面板（`Desktop QoL`）**：内置于 `⋮ -> Extensions -> Desktop QoL`，提供图形化开关、底栏显示项勾选、自定义 CDP 端口、中英双语切换，并在 Sidecar 进程内直接托管本地统计服务（默认 `9223`，端口占用时自动回退到随机可用端口）与 CDP 自动注入守护。
-- **🖥️ 终端交互式 TUI / CLI**：也可独立通过终端 TUI 或命令行参数运行，配置持久化保存在 `~/.gemini/antigravity/qol-config.json`（兼容旧版插件目录 `config.json` 自动迁移）。
-
----
-
-## 📦 环境要求
-
-- **Node.js >= 22**（Node >= 22.5 可启用内置 `node:sqlite` 读取 `.db` 精确流式耗时与上下文上限；作为插件运行时直接使用 Antigravity Desktop 内置运行时，无需 `npm install`）
-- 启动 Antigravity Desktop 时带上调试端口参数：`--remote-debugging-port=9222`（可在面板或通过环境变量 `AGY_CDP_PORT` 自定义）
+- **🎨 Custom Wallpaper (Local & URL)**: Inject any local image path (including `~/...`), `https://` URL, or `data:image/...` as a translucent ambient background layer (`opacity` configurable via slider, default `0.12`, up to `10MB`). Remote URLs are streamed and converted to `base64` on the fly to bypass CSP restrictions.
+- **🪄 Style Flattening**: Globally remove multi-layer `box-shadow` / glow overlays and apply clean `1px` hairline borders.
+- **📊 Session Stats Bar & Live Internal Status**: Centered bottom bar below the composer (with customizable `status`, `turns`, `tokens`, and `context` items) showing:
+  - **Live Fixed-Width Status Slot**: Real-time internal state parsed from `transcript.jsonl` & `language_server.log` without layout shift (`Idle` / `Waiting` / `Streaming` / `Running tool` / `Safety check` / `503 No capacity` / `Retrying` / `Request error`).
+  - **Turns, Steps & Speed**: Turns, steps, and average output speed (`tok/s`).
+  - **Tokens & Cache Hit**: Total tokens and prompt cache hit rate.
+  - **Context Usage Ring**: Reads local SQLite `.db` (Protobuf metadata) or `.pbtxt` `max_token_limit`.
+  - **Interactive Hover Popover**: Detailed session metrics, elapsed seconds, active tool names, and 503 / retry diagnostics.
+  - **Configurable Click Action**: Click the stats bar to open any Sidecar panel (defaults to `sidecar__context/context_panel__/`) or external URL.
+- **⎋ Double-ESC to Cancel**: Double-press `ESC` while generating (within 2 seconds, with a centered confirmation toast) to stop generation without conflicting with key auto-repeat, open menus, dialogs, or IME composition.
+- **🎛️ Native Sidecar Settings Panel (`Desktop QoL`)**: Built-in Web UI panel accessible from the side panel `+` menu (`Cmd+T`) or `⋮ -> Extensions -> Desktop QoL`, featuring toggle switches, stats bar item checkboxes, custom CDP port configuration, opacity slider, bilingual i18n (`中文` / `EN`), and an in-process background daemon (`startWatchLoop`) that hosts the local stats server (port `9223` with automatic random port fallback if occupied) and auto-injects via CDP.
+- **🖥️ Interactive CLI / TUI**: Also usable standalone via terminal TUI or CLI flags. Configuration persists in `~/.gemini/antigravity/qol-config.json` (with automatic fallback migration from legacy `config.json`).
 
 ---
 
-## 🚀 快速开始
+## 📦 Requirements
 
-### 1. 作为 Antigravity 插件安装（推荐）
+- **Node.js >= 22** (Node >= 22.5 enables built-in `node:sqlite` for exact `.db` streaming timing and context limit reads; zero `npm install` needed)
+- Launch Antigravity Desktop with `--remote-debugging-port=9222` (the plugin modifies zero application files; the port is customizable in the settings panel or via `AGY_CDP_PORT`):
+  - **macOS**: `open -a Antigravity --args --remote-debugging-port=9222`
+  - **Windows**: `Antigravity.exe --remote-debugging-port=9222`
+  - **Linux**: `antigravity --remote-debugging-port=9222`
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install as Antigravity Plugin (Recommended)
 ```bash
 agy plugin install https://github.com/peach0x33a/agy-desktop-qol
 
-# 或直接软链接 / 克隆到插件目录：
+# Or link/clone directly into Antigravity plugins directory:
 ln -s "$(pwd)" ~/.gemini/config/plugins/agy-desktop-qol
 ```
 
-安装后在 Antigravity Desktop 右上角打开 **`⋮ -> Extensions -> Desktop QoL`** 即可在图形面板中配置并一键应用。
+Once installed, open **Desktop QoL** from the side panel `+` menu (`Cmd+T`), **`⋮ -> Extensions -> Desktop QoL`**, or invoke `/desktop-qol` in chat to configure all options visually.
 
-### 2. 终端交互式 TUI
+### 2. Interactive Terminal TUI
 ```bash
 node agy-desktop-qol.mjs
 ```
 
-### 3. 命令行快捷指令
+### 3. CLI Shortcuts
 ```bash
-node agy-desktop-qol.mjs <图片路径或URL> [透明度]
-node agy-desktop-qol.mjs --apply       # 按当前配置立即执行一次 CDP 注入
-node agy-desktop-qol.mjs --watch       # 独立运行后台自动注入与统计服务守护进程
-node agy-desktop-qol.mjs --clear       # 仅清除壁纸并保存配置
-node agy-desktop-qol.mjs --clear-all   # 清除所有注入样式并保存配置
+node agy-desktop-qol.mjs <image-path-or-url> [opacity]
+node agy-desktop-qol.mjs --apply       # Apply current config once via CDP
+node agy-desktop-qol.mjs --watch       # Standalone background auto-inject & stats daemon
+node agy-desktop-qol.mjs --clear       # Clear wallpaper only and persist config
+node agy-desktop-qol.mjs --clear-all   # Clear all injected styles and persist config
 ```
 
-### 4. 运行单元测试
+### 4. Run Unit Tests
 ```bash
 npm test
 ```

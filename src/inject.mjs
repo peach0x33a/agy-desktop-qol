@@ -1,9 +1,11 @@
 import {
   DEFAULT_CONFIG,
+  ESC_CANCEL_VERSION,
   I18N,
   PREFERRED_STATS_PORT,
   STATS_BAR_VERSION,
   UI_STYLE_ID,
+  UI_STYLE_VERSION,
   WALLPAPER_STYLE_ID,
   getCdpPort,
   normalizeConfig,
@@ -16,8 +18,10 @@ import { getStatsToken, resolveStatsPort } from './stats-server.mjs';
 import { computeConversationStats } from './transcript.mjs';
 import { resolveWallpaperBgUrl } from './wallpaper.mjs';
 
-export function buildInjectJS(id, cssText) {
+export function buildInjectJS(id, cssText, version = null) {
   const escaped = JSON.stringify(cssText);
+  const versionStmt =
+    version != null ? `el.dataset.agyVersion = ${JSON.stringify(String(version))};` : '';
   return `(() => {
     const id = ${JSON.stringify(id)};
     let el = document.getElementById(id);
@@ -27,6 +31,7 @@ export function buildInjectJS(id, cssText) {
       document.head.appendChild(el);
     }
     el.textContent = ${escaped};
+    ${versionStmt}
     return 'ok';
   })()`;
 }
@@ -649,6 +654,7 @@ export function buildEscCancelInjectJS(lang = 'zh') {
       }
     };
     window.addEventListener('keydown', window.__agyEscCancelHandler, true);
+    window.__agyEscCancelVersion = ${ESC_CANCEL_VERSION};
     return 'esc-ok';
   })()`;
 }
@@ -659,6 +665,7 @@ export function buildEscCancelRemoveJS() {
       window.removeEventListener('keydown', window.__agyEscCancelHandler, true);
       window.__agyEscCancelHandler = null;
     }
+    window.__agyEscCancelVersion = null;
     if (window.__agyEscToastTimer) {
       clearTimeout(window.__agyEscToastTimer);
       window.__agyEscToastTimer = null;
@@ -709,7 +716,7 @@ export async function applyConfig(rawCfg, logFn = console.log, opts = {}) {
   }
 
   if (cfg.enableInputStyle) {
-    parts.push(buildInjectJS(UI_STYLE_ID, CLEAN_INPUT_CSS));
+    parts.push(buildInjectJS(UI_STYLE_ID, CLEAN_INPUT_CSS, UI_STYLE_VERSION));
   } else {
     parts.push(buildRemoveJS(UI_STYLE_ID));
   }

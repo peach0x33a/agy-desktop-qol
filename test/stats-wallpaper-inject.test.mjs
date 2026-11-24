@@ -4,6 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { ESC_CANCEL_VERSION, UI_STYLE_VERSION } from '../src/config.mjs';
 import { isInjectablePage } from '../src/cdp.mjs';
 import {
   CLEAN_INPUT_CSS,
@@ -201,6 +202,8 @@ test('expandHomePath and resolveWallpaperBgUrl validate local and remote images 
 test('injected scripts include key repeat guard, res.ok check, X-QoL-Token header, and port tracking', () => {
   const escJs = buildEscCancelInjectJS('en');
   assert.ok(escJs.includes('e.repeat'));
+  assert.ok(escJs.includes(`window.__agyEscCancelVersion = ${ESC_CANCEL_VERSION}`));
+  assert.ok(buildEscCancelRemoveJS().includes('window.__agyEscCancelVersion = null'));
   assert.ok(escJs.includes('[role="alertdialog"]'));
   assert.ok(escJs.includes('.agy-overlay'));
   assert.ok(escJs.includes('[data-select-popup]'));
@@ -228,13 +231,16 @@ test('injected scripts include key repeat guard, res.ok check, X-QoL-Token heade
   assert.ok(statsJs.includes('sidePanelV2/setContent'));
   assert.ok(statsJs.includes('sidePanel/setSidePanelOpen'));
 
+  const uiInjectJs = buildInjectJS('agy-clean-ui', CLEAN_INPUT_CSS, UI_STYLE_VERSION);
+  assert.ok(uiInjectJs.includes(`el.dataset.agyVersion = "${UI_STYLE_VERSION}"`));
+
   // All generated browser scripts must parse as valid JS
   for (const snippet of [
     escJs,
     buildEscCancelRemoveJS(),
     statsJs,
     buildStatsBarRemoveJS(),
-    buildInjectJS('agy-clean-ui', CLEAN_INPUT_CSS),
+    uiInjectJs,
     buildRemoveJS('agy-clean-ui'),
   ]) {
     assert.doesNotThrow(() => new Function(`return ${snippet};`));
@@ -253,4 +259,6 @@ test('injected scripts include key repeat guard, res.ok check, X-QoL-Token heade
   );
   assert.equal(exprEmptyWp.includes('agy-custom-wallpaper'), false);
   assert.equal(exprEmptyWp.includes('window.__agyStatsPort !== 9555'), true);
+  assert.equal(exprEmptyWp.includes(`dataset?.agyVersion !== "${UI_STYLE_VERSION}"`), true);
+  assert.equal(exprEmptyWp.includes(`window.__agyEscCancelVersion !== ${ESC_CANCEL_VERSION}`), true);
 });

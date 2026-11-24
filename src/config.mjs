@@ -48,6 +48,8 @@ export const PREFERRED_STATS_PORT = normalizePort(process.env.AGY_STATS_PORT, 92
 export const WALLPAPER_STYLE_ID = 'agy-custom-wallpaper';
 export const UI_STYLE_ID = 'agy-clean-ui';
 export const STATS_BAR_VERSION = 4;
+export const UI_STYLE_VERSION = 2;
+export const ESC_CANCEL_VERSION = 2;
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 

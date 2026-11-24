@@ -1,8 +1,11 @@
 {
   "name": "agy-desktop-qol",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Zero-dependency QoL enhancer for Antigravity Desktop (custom wallpaper, flat UI, session stats bar) via CDP.",
+  "homepage": "https://github.com/peach0x33a/agy-desktop-qol#readme",
+  "repository": "https://github.com/peach0x33a/agy-desktop-qol",
+  "license": "MIT",
   "main": "agy-desktop-qol.mjs",
   "bin": {
     "agy-desktop-qol": "./agy-desktop-qol.mjs"

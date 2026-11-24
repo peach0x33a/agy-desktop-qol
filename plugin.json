@@ -2,7 +2,26 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "agy-desktop-qol",
   "displayName": "Desktop QoL",
-  "version": "0.2.0",
-  "description": "Zero-dependency QoL enhancer for Antigravity Desktop (custom wallpaper, flat UI, session stats bar) via CDP.",
-  "logo": "assets/logo.svg"
+  "version": "0.2.1",
+  "description": "Zero-dependency QoL enhancer for Antigravity Desktop (custom wallpaper, flat UI, session stats bar, double-ESC cancel) via CDP.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Open the Desktop QoL settings panel",
+    "How do I enable CDP for Desktop QoL?"
+  ],
+  "author": {
+    "name": "peach0x33a",
+    "url": "https://github.com/peach0x33a"
+  },
+  "homepage": "https://github.com/peach0x33a/agy-desktop-qol#readme",
+  "repository": "https://github.com/peach0x33a/agy-desktop-qol",
+  "license": "MIT",
+  "keywords": [
+    "qol",
+    "desktop",
+    "wallpaper",
+    "theme",
+    "stats",
+    "sidecar"
+  ]
 }
