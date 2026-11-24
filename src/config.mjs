@@ -47,7 +47,7 @@ export const DEFAULT_CDP_PORT = normalizePort(process.env.AGY_CDP_PORT, 9222);
 export const PREFERRED_STATS_PORT = normalizePort(process.env.AGY_STATS_PORT, 9223);
 export const WALLPAPER_STYLE_ID = 'agy-custom-wallpaper';
 export const UI_STYLE_ID = 'agy-clean-ui';
-export const STATS_BAR_VERSION = 2;
+export const STATS_BAR_VERSION = 3;
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 

@@ -208,6 +208,8 @@ test('injected scripts include key repeat guard, res.ok check, X-QoL-Token heade
   assert.ok(!statsJs.includes('?t='));
   assert.ok(statsJs.includes('if (!res.ok)'));
   assert.ok(statsJs.includes('summary.dataset.lastHtml !== nextSummaryHtml'));
+  assert.ok(statsJs.includes('sidePanelV2/setContent'));
+  assert.ok(statsJs.includes('sidePanel/setSidePanelOpen'));
 
   // All generated browser scripts must parse as valid JS
   for (const snippet of [

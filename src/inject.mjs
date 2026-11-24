@@ -309,18 +309,118 @@ export function buildStatsBarInjectJS(
           summary.dataset.lastHtml = nextSummaryHtml;
           summary.innerHTML = nextSummaryHtml;
         }
-        summary.onclick = CLICK_TARGET
-          ? () => {
-              if (/^https?:\\/\\//i.test(CLICK_TARGET)) {
-                window.open(CLICK_TARGET, '_blank', 'noopener,noreferrer');
+        const findAppInternals = () => {
+          const root = document.getElementById('root') || document.body.firstElementChild;
+          const fk = Object.keys(root || {}).find(
+            (k) => k.startsWith('__reactContainer') || k.startsWith('__reactFiber')
+          );
+          if (!fk) return null;
+          const stack = [root[fk]];
+          const seen = new Set();
+          let store = null;
+          let ext = null;
+          let isV2 = null;
+          let steps = 0;
+          while (stack.length && steps < 200) {
+            const node = stack.pop();
+            if (!node || seen.has(node)) continue;
+            seen.add(node);
+            steps++;
+            const val = node.memoizedProps?.value;
+            if (val) {
+              if (!store && val.store?.dispatch && val.store?.getState) store = val.store;
+              if (!ext && typeof val.get === 'function') {
+                try {
+                  const e = val.get('extensibility');
+                  if (e?.provider?.getState && e?.resolveSidecarUrl) {
+                    ext = e;
+                    isV2 = val.get('auxPaneComponent')?.redesignEnabled === true;
+                  }
+                } catch {}
+              }
+            }
+            if (store && ext) break;
+            if (node.sibling) stack.push(node.sibling);
+            if (node.child) stack.push(node.child);
+          }
+          return store ? { store, ext, isV2 } : null;
+        };
+
+        const parseSidecarTarget = (raw, sidecars) => {
+          if (raw.startsWith('sidecar__')) {
+            const rest = raw.slice('sidecar__'.length);
+            const sepIdx = rest.lastIndexOf('__');
+            if (sepIdx > 0) {
+              return { sidecarId: rest.slice(0, sepIdx), path: rest.slice(sepIdx + 2) || '/' };
+            }
+            return { sidecarId: rest, path: '/' };
+          }
+          if (/^sidecar:\\/\\//i.test(raw)) {
+            const rest = raw.replace(/^sidecar:\\/\\//i, '').replace(/^\\/+/, '');
+            const matched = (sidecars || [])
+              .map((d) => d.sidecarId)
+              .filter((id) => rest === id || rest.startsWith(id + '/'))
+              .sort((a, b) => b.length - a.length)[0];
+            if (matched) {
+              return { sidecarId: matched, path: rest.slice(matched.length) || '/' };
+            }
+          }
+          return null;
+        };
+
+        const openClickTarget = (target, conversationId) => {
+          if (/^https?:\\/\\//i.test(target)) {
+            window.open(target, '_blank', 'noopener,noreferrer');
+            return;
+          }
+          const internals = findAppInternals();
+          const panelScope = { kind: 'cascadeId', cascadeId: conversationId };
+          if (internals?.store && internals?.ext) {
+            const sidecars = internals.ext.provider.getState() || [];
+            const parsed = parseSidecarTarget(target, sidecars);
+            if (parsed) {
+              const sc = sidecars.find((d) => d.sidecarId === parsed.sidecarId);
+              const views = sc?.config?.uiConfig?.views || [];
+              const norm = (p) => String(p || '/').replace(/^\\/+/, '');
+              const view = views.find((v) => norm(v.path) === norm(parsed.path)) || views[0];
+              if (sc?.baseUrl && view) {
+                const url = internals.ext.resolveSidecarUrl(sc.baseUrl, view.path);
+                const title = view.title || sc.config?.uiConfig?.displayName || sc.sidecarId;
+                const tabId = 'sidecar__' + sc.sidecarId + '__' + view.path;
+                const useV2 = internals.isV2 ?? Boolean(internals.store.getState()?.sidePanelV2);
+                internals.store.dispatch({
+                  type: useV2 ? 'sidePanelV2/setContent' : 'sidePanel/setContent',
+                  payload: {
+                    panelScope,
+                    content: {
+                      type: 'sidecarView',
+                      sidecarView: { sidecarId: sc.sidecarId, path: view.path, url, title },
+                    },
+                    tabId,
+                    ...(useV2 ? { keepOpen: true } : {}),
+                  },
+                });
+                internals.store.dispatch({
+                  type: 'sidePanel/setSidePanelOpen',
+                  payload: { panelScope, isOpen: true },
+                });
                 return;
               }
-              const u = new URL(location.href);
-              u.searchParams.set('tab', CLICK_TARGET);
-              history.pushState({}, '', u.toString());
-              window.dispatchEvent(new PopStateEvent('popstate'));
             }
-          : null;
+          }
+          if (internals?.store) {
+            internals.store.dispatch({
+              type: 'sidePanel/setSidePanelOpen',
+              payload: { panelScope, isOpen: true },
+            });
+          }
+          const u = new URL(location.href);
+          u.searchParams.set('tab', target);
+          history.pushState({}, '', u.toString());
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        };
+
+        summary.onclick = CLICK_TARGET ? () => openClickTarget(CLICK_TARGET, m[1]) : null;
       } catch {
         setPlainStatus(bar, L.disconnected);
       } finally {
