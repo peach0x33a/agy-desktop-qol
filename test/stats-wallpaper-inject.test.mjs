@@ -201,6 +201,22 @@ test('expandHomePath and resolveWallpaperBgUrl validate local and remote images 
 test('injected scripts include key repeat guard, res.ok check, X-QoL-Token header, and port tracking', () => {
   const escJs = buildEscCancelInjectJS('en');
   assert.ok(escJs.includes('e.repeat'));
+  assert.ok(escJs.includes('[role="alertdialog"]'));
+  assert.ok(escJs.includes('.agy-overlay'));
+  assert.ok(escJs.includes('[data-select-popup]'));
+  assert.ok(escJs.includes('[data-hover-card-popup]'));
+  assert.ok(escJs.includes('button[data-testid="input-cancel-button"]'));
+  assert.ok(!escJs.includes('[data-base-ui-portal]'));
+
+  assert.ok(CLEAN_INPUT_CSS.includes('.surface-composer > .surface-composer-card'));
+  assert.ok(CLEAN_INPUT_CSS.includes('.agy-overlay'));
+  assert.ok(CLEAN_INPUT_CSS.includes('[role="alertdialog"]'));
+  assert.ok(CLEAN_INPUT_CSS.includes('[data-select-popup]'));
+  assert.ok(CLEAN_INPUT_CSS.includes('[data-hover-card-popup]'));
+  assert.ok(CLEAN_INPUT_CSS.includes('[data-peek-surface]::after'));
+  assert.ok(CLEAN_INPUT_CSS.includes('tiling-splitter'));
+  assert.ok(CLEAN_INPUT_CSS.includes('data-has-browser-hole="true"'));
+  assert.ok(!CLEAN_INPUT_CSS.includes('media-modal-header'));
 
   const statsJs = buildStatsBarInjectJS('zh', 'sidecar__context/context_panel__/', ['status', 'turns'], 9555, 'secret_tok');
   assert.ok(statsJs.includes('window.__agyStatsPort = STATS_PORT'));

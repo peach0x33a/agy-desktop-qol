@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  KNOWN_PROTO_VERSIONS,
   decodeProto,
   decodeProtoTimestamp,
   readDbMaxTokenLimit,
@@ -38,6 +39,7 @@ function encodeTimestamp(sec, nano = 0) {
 }
 
 test('decodeProto and decodeProtoTimestamp decode nested protobuf messages', () => {
+  assert.ok(KNOWN_PROTO_VERSIONS.includes('2.35'));
   const tsBuf = encodeTimestamp(1760000000, 500000000);
   const ts = decodeProtoTimestamp(tsBuf);
   assert.equal(ts, 1760000000.5);

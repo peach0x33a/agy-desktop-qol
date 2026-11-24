@@ -62,7 +62,7 @@ export function decodeProtoTimestamp(bytes) {
   }
 }
 
-const KNOWN_PROTO_VERSIONS = ['2.33', '2.34'];
+export const KNOWN_PROTO_VERSIONS = ['2.33', '2.34', '2.35'];
 let hostVersionCache = { version: null, at: 0, port: null };
 
 export function refreshHostVersion(cdpPort) {

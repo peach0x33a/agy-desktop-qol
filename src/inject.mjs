@@ -1,4 +1,3 @@
-import os from 'node:os';
 import {
   DEFAULT_CONFIG,
   I18N,
@@ -512,18 +511,6 @@ export async function pushStatsToPage(wsUrl, opts = {}) {
   }
 }
 
-const WIN_MEDIA_MODAL_CSS =
-  os.platform() === 'win32'
-    ? `
-  [data-testid="media-modal-header"] {
-    padding-top: calc(env(titlebar-area-height, 32px) + 8px) !important;
-    padding-bottom: 8px !important;
-    padding-right: 16px !important;
-    height: auto !important;
-  }
-`
-    : '';
-
 export const CLEAN_INPUT_CSS = `
   *, *::before, *::after {
     box-shadow: none !important;
@@ -533,27 +520,49 @@ export const CLEAN_INPUT_CSS = `
     outline-offset: 1px !important;
   }
   .surface-composer,
+  .surface-composer > .surface-composer-card,
   .agy-user-bubble,
+  .agy-overlay,
+  .surface-glass,
   [role="dialog"],
+  [role="alertdialog"],
   [role="menu"],
+  [data-select-popup],
+  [data-hover-card-popup],
   [data-radix-popper-content-wrapper] > * {
     border: 1px solid light-dark(rgba(10, 10, 12, 0.12), rgba(255, 255, 255, 0.14)) !important;
   }
   [data-slot="toggle-group"] > button[data-pressed],
-  .agy-sidebar-row[data-selected="true"] {
+  .agy-sidebar-row[data-selected="true"],
+  .agy-sidebar-raised {
     box-shadow: inset 0 0 0 1px light-dark(rgba(10, 10, 12, 0.09), rgba(255, 255, 255, 0.09)) !important;
   }
   [data-main-content-body]::after,
   [data-side-panel-body]::after,
   [data-hoisted-slot-rim="side"],
-  [data-tiling-pane]::after,
   [data-testid="bottom-terminal-panel"]::after {
     box-shadow: inset 0 0 0 0.5px var(--card-edge, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.10))) !important;
+  }
+  [data-tiling-pane]::after {
+    box-shadow: inset 0 0 0 0.5px var(--card-edge, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.10))), 0 0 0 var(--card-radius, 0.75rem) var(--shell-canvas, transparent) !important;
+  }
+  .agy-inset-shell [data-peek-surface]::after {
+    box-shadow: 0 0 0 0.5px var(--card-edge, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.10))) !important;
+  }
+  [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"][data-axis="horizontal"]::before,
+  [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"][data-axis="horizontal"] > :first-child,
+  [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"] > [data-splitter-band]::after {
+    box-shadow: inset 0.5px 0 0 var(--card-edge, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.10))) !important;
+  }
+  body[data-has-browser-hole="true"] .agy-sheet[data-sheet-inset] :is([data-main-content-body], [data-side-panel-body]) {
+    box-shadow: 0 0 0 calc(var(--card-gap, 0.5rem) + var(--card-radius, 0.75rem)) var(--shell-canvas, transparent) !important;
+  }
+  body[data-has-browser-hole="true"] .agy-inset-shell .agy-sheet[data-sheet-inset] [data-side-panel-strip]:not([data-has-browser-hole="true"]) {
+    box-shadow: var(--card-gap, 0.5rem) 0 0 var(--shell-canvas, transparent) !important;
   }
   [role="switch"] > span {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.08) !important;
   }
-  ${WIN_MEDIA_MODAL_CSS}
 `;
 
 export function buildEscCancelInjectJS(lang = 'zh') {
@@ -615,7 +624,7 @@ export function buildEscCancelInjectJS(lang = 'zh') {
 
     window.__agyEscCancelHandler = (e) => {
       if (e.key !== 'Escape' || e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      const blocking = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]')].some((el) => {
+      const blocking = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .agy-overlay, [data-select-popup], [data-hover-card-popup], [data-radix-popper-content-wrapper]')].some((el) => {
         if ((el.getAttribute('aria-label') || '').startsWith('Typeahead')) return false;
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
@@ -623,7 +632,7 @@ export function buildEscCancelInjectJS(lang = 'zh') {
       if (blocking) return;
       const composer = document.querySelector('.surface-composer');
       if (!composer) return;
-      const btn = composer.querySelector('button[data-tooltip-id="input-send-button-cancel-tooltip"]') ||
+      const btn = composer.querySelector('button[data-testid="input-cancel-button"], button[data-tooltip-id="input-send-button-cancel-tooltip"]') ||
         [...composer.querySelectorAll('button')].find((b) => /cancel|stop|取消|停止/i.test((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('data-tooltip-id') || '')));
       if (!btn || btn.disabled) {
         hideToast();
