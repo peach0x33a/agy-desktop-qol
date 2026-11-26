@@ -308,6 +308,8 @@ export function computeConversationStats(convId, opts = {}) {
     cacheHitRate,
     lastCacheHitRate: st.lastCacheHitRate,
     tps,
+    lastTtftMs: dbTiming?.lastTtftMs ?? null,
+    avgTtftMs: dbTiming?.avgTtftMs ?? null,
     contextPct,
     modelSeconds: Math.round(effectiveModelMs / 1000),
     lastContextTokens,

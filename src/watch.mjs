@@ -96,20 +96,20 @@ export function buildNeedInjectExpression(cfg, activeStatsPort) {
   if (cfg.enableInputStyle) {
     checks.push(`!document.getElementById(${JSON.stringify(UI_STYLE_ID)})`);
     checks.push(
-      `document.getElementById(${JSON.stringify(UI_STYLE_ID)})?.dataset?.agyVersion !== ${JSON.stringify(String(UI_STYLE_VERSION))}`
+      `Number(document.getElementById(${JSON.stringify(UI_STYLE_ID)})?.dataset?.agyVersion || 0) < ${UI_STYLE_VERSION}`
     );
   }
   if (cfg.enableStatsBar) {
     checks.push('!window.__agyStatsTimer');
     checks.push("typeof window.__agyRenderStats !== 'function'");
-    checks.push(`window.__agyStatsVersion !== ${STATS_BAR_VERSION}`);
+    checks.push(`Number(window.__agyStatsVersion || 0) < ${STATS_BAR_VERSION}`);
     if (activeStatsPort) {
       checks.push(`window.__agyStatsPort !== ${Number(activeStatsPort)}`);
     }
   }
   if (cfg.enableEscCancel) {
     checks.push('!window.__agyEscCancelHandler');
-    checks.push(`window.__agyEscCancelVersion !== ${ESC_CANCEL_VERSION}`);
+    checks.push(`Number(window.__agyEscCancelVersion || 0) < ${ESC_CANCEL_VERSION}`);
   }
   return checks.length > 0 ? checks.join(' || ') : 'false';
 }

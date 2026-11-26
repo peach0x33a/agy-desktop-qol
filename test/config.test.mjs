@@ -43,12 +43,19 @@ test('normalizeOpacity rejects NaN/booleans and clamps to [0, 1]', () => {
 });
 
 test('normalizeStatsBarItems filters and deduplicates valid items', () => {
-  assert.deepEqual(normalizeStatsBarItems(['STATUS', 'tokens', 'invalid', 'status']), [
+  assert.deepEqual(normalizeStatsBarItems(['STATUS', 'ttft', 'tokens', 'invalid', 'status']), [
     'status',
+    'ttft',
     'tokens',
   ]);
   assert.deepEqual(normalizeStatsBarItems([]), []);
-  assert.deepEqual(normalizeStatsBarItems(null), ['status', 'turns', 'tokens', 'context']);
+  assert.deepEqual(normalizeStatsBarItems(null), [
+    'status',
+    'turns',
+    'ttft',
+    'tokens',
+    'context',
+  ]);
 });
 
 test('saveConfig writes atomically and loadConfig reads normalized values', () => {

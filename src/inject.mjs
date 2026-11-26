@@ -83,6 +83,14 @@ export function buildStatsBarInjectJS(
       return m > 0 ? m + ' ' + L.min + ' ' + s + ' ' + L.sec : s + ' ' + L.sec;
     };
 
+    const formatTtft = (ms) => {
+      const val = Number(ms || 0);
+      if (!(val > 0)) return '--';
+      if (val < 1000) return Math.round(val) + 'ms';
+      if (val < 100000) return (val / 1000).toFixed(1) + 's';
+      return Math.round(val / 1000) + 's';
+    };
+
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const formatLiveBadge = (live) => {
@@ -239,6 +247,9 @@ export function buildStatsBarInjectJS(
       const gaugeSvg =
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
         '<path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>';
+      const zapSvg =
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
+        '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
       const dbSvg =
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.85;">' +
         '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>';
@@ -273,6 +284,8 @@ export function buildStatsBarInjectJS(
           '<span style="display:inline-flex;align-items:center;gap:6px;">' + gaugeSvg + L.popTitle + '</span><span>' + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + '</span></div>' +
           row(L.modelTime, formatDuration(d.modelSeconds)) +
           row(L.tps, (d.tps || '--') + ' tok/s') +
+          row(L.ttftLast, formatTtft(d.lastTtftMs)) +
+          row(L.ttftAvg, formatTtft(d.avgTtftMs)) +
           row(L.outTok, formatTok(outputTokens)) +
           row(L.totTok, formatTok(totalTokens)) +
           row(L.cacheRate, cacheRateText) +
@@ -288,9 +301,14 @@ export function buildStatsBarInjectJS(
         '<span style="display:inline-flex;align-items:center;gap:6px;color:' + liveBadge.color + ';font-weight:' + (liveBadge.idle ? '400' : '500') + ';">' +
         '<span style="width:6px;height:6px;border-radius:50%;background:' + liveBadge.dot + ';display:inline-block;"></span>' +
         esc(liveBadge.barText) + '</span>';
+      const ttftBarText =
+        Number(d.lastTtftMs) > 0
+          ? 'TTFT ' + L.ttftLastShort + ' ' + formatTtft(d.lastTtftMs) + ' · ' + L.ttftAvgShort + ' ' + formatTtft(d.avgTtftMs)
+          : 'TTFT --';
       const partMap = {
         status: liveSpan,
         turns: '<span style="display:inline-flex;align-items:center;gap:5px;">' + gaugeSvg + turns + ' ' + L.turns + ' ' + steps + ' ' + L.steps + ' · ' + (d.tps || '--') + ' tok/s</span>',
+        ttft: '<span style="display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums;">' + zapSvg + ttftBarText + '</span>',
         tokens: '<span style="display:inline-flex;align-items:center;gap:5px;">' + dbSvg + formatTok(totalTokens) + ' tok · ' + L.cacheHit + ' ' + cacheHitRate + '%</span>',
         context: '<span id="agy-context-trigger" style="display:inline-flex;align-items:center;gap:5px;">' + ringSvg + pct + '%</span>',
       };
@@ -525,7 +543,6 @@ export const CLEAN_INPUT_CSS = `
     outline-offset: 1px !important;
   }
   .surface-composer,
-  .surface-composer > .surface-composer-card,
   .agy-user-bubble,
   .agy-overlay,
   .surface-glass,
@@ -536,6 +553,21 @@ export const CLEAN_INPUT_CSS = `
   [data-hover-card-popup],
   [data-radix-popper-content-wrapper] > * {
     border: 1px solid light-dark(rgba(10, 10, 12, 0.12), rgba(255, 255, 255, 0.14)) !important;
+  }
+  .surface-composer {
+    padding: 0 !important;
+    transition: border-color 160ms ease !important;
+  }
+  .surface-composer:focus-within {
+    border-color: light-dark(rgba(10, 10, 12, 0.22), rgba(255, 255, 255, 0.22)) !important;
+  }
+  .surface-composer > .surface-composer-card {
+    border: 0 !important;
+  }
+  .surface-composer > :not(.surface-composer-card, .voice-glow-ring, [hidden], [class*="grid-rows-[0fr]"]) ~ .surface-composer-card {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-top: 1px solid var(--card-border, light-dark(rgba(10, 10, 12, 0.08), rgba(255, 255, 255, 0.08))) !important;
   }
   [data-slot="toggle-group"] > button[data-pressed],
   .agy-sidebar-row[data-selected="true"],
@@ -556,7 +588,8 @@ export const CLEAN_INPUT_CSS = `
   }
   [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"][data-axis="horizontal"]::before,
   [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"][data-axis="horizontal"] > :first-child,
-  [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"] > [data-splitter-band]::after {
+  [data-split-panes] .agy-sheet[data-sheet-inset] [data-testid="tiling-splitter"] > [data-splitter-band]::after,
+  .agy-sheet[data-side-panel-docked] [data-side-panel-strip]:not([data-active-tab-id="newTab__empty"])::before {
     box-shadow: inset 0.5px 0 0 var(--card-edge, light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.10))) !important;
   }
   body[data-has-browser-hole="true"] .agy-sheet[data-sheet-inset] :is([data-main-content-body], [data-side-panel-body]) {
@@ -629,7 +662,7 @@ export function buildEscCancelInjectJS(lang = 'zh') {
 
     window.__agyEscCancelHandler = (e) => {
       if (e.key !== 'Escape' || e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      const blocking = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .agy-overlay, [data-select-popup], [data-hover-card-popup], [data-radix-popper-content-wrapper]')].some((el) => {
+      const blocking = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .agy-overlay, [data-select-popup], [data-hover-card-popup], [data-bottom-sheet-popup]:not([data-closed]), [data-radix-popper-content-wrapper]')].some((el) => {
         if ((el.getAttribute('aria-label') || '').startsWith('Typeahead')) return false;
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';

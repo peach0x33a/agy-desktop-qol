@@ -459,6 +459,7 @@
         <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
           <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="stats-item-cb" value="status" /> <span id="lblItemStatus">实时状态</span></label>
           <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="stats-item-cb" value="turns" /> <span id="lblItemTurns">轮次与速度</span></label>
+          <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="stats-item-cb" value="ttft" /> <span id="lblItemTtft">TTFT 延迟</span></label>
           <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="stats-item-cb" value="tokens" /> <span id="lblItemTokens">Token 与缓存</span></label>
           <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="stats-item-cb" value="context" /> <span id="lblItemContext">上下文百分比</span></label>
         </div>
@@ -550,11 +551,12 @@
         lblEsc: 'ESC 取消对话',
         subEsc: '生成中连按两次 ESC 快速停止（2 秒内二次确认）',
         lblStats: '底部会话统计栏',
-        subStats: '轮数/步数、tok/s、缓存命中率、上下文与实时状态',
+        subStats: '轮数/步数、TTFT、tok/s、缓存命中率、上下文与实时状态',
         lblClickTarget: '点击状态栏的地址',
         lblStatsItems: '底栏显示内容',
         lblItemStatus: '实时状态',
         lblItemTurns: '轮次与速度',
+        lblItemTtft: 'TTFT 延迟',
         lblItemTokens: 'Token 与缓存',
         lblItemContext: '上下文百分比',
         secConnection: '连接',
@@ -582,11 +584,12 @@
         lblEsc: 'ESC to Cancel',
         subEsc: 'Double-press ESC while generating to stop (2s confirmation)',
         lblStats: 'Bottom Stats Bar',
-        subStats: 'Turns/steps, tok/s, cache hit, context & live status',
+        subStats: 'Turns/steps, TTFT, tok/s, cache hit, context & live status',
         lblClickTarget: 'Stats Bar Click Target',
         lblStatsItems: 'Stats bar items',
         lblItemStatus: 'Live status',
         lblItemTurns: 'Turns & speed',
+        lblItemTtft: 'TTFT latency',
         lblItemTokens: 'Tokens & cache',
         lblItemContext: 'Context %',
         secConnection: 'Connection',
@@ -640,7 +643,7 @@
       document.getElementById('enableStatsBar').checked = !!c.enableStatsBar;
       document.getElementById('statsClickTarget').value = c.statsClickTarget ?? 'sidecar__context/context_panel__/';
       document.getElementById('cdpPort').value = c.cdpPort ?? 9222;
-      const items = Array.isArray(c.statsBarItems) ? c.statsBarItems : ['status', 'turns', 'tokens', 'context'];
+      const items = Array.isArray(c.statsBarItems) ? c.statsBarItems : ['status', 'turns', 'ttft', 'tokens', 'context'];
       document.querySelectorAll('.stats-item-cb').forEach((cb) => {
         cb.checked = items.includes(cb.value);
       });

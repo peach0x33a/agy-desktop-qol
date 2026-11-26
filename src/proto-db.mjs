@@ -62,6 +62,20 @@ export function decodeProtoTimestamp(bytes) {
   }
 }
 
+export function decodeProtoDuration(bytes) {
+  if (!(bytes instanceof Uint8Array)) return 0;
+  try {
+    const d = decodeProto(bytes);
+    const sec = d.get(1)?.[0] || 0;
+    const nano = d.get(2)?.[0] || 0;
+    if (typeof sec !== 'number' || typeof nano !== 'number') return 0;
+    const total = sec + nano / 1e9;
+    return total > 0 && Number.isFinite(total) ? total : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export const KNOWN_PROTO_VERSIONS = ['2.33', '2.34', '2.35'];
 let hostVersionCache = { version: null, at: 0, port: null };
 
@@ -127,13 +141,47 @@ export function readDbTimingStats(convId, opts = {}) {
     } catch {
       // ignore if unsupported
     }
-    const rows = db.prepare('SELECT metadata FROM steps WHERE step_type = 15 AND status = 3').all();
+    const genMap = new Map();
+    const hasGenTable = Boolean(
+      db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gen_metadata'")
+        .get()
+    );
+    if (hasGenTable) {
+      const genRows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+      for (const gRow of genRows) {
+        if (!(gRow?.data instanceof Uint8Array)) continue;
+        const root = decodeProto(gRow.data);
+        const b1 = root.get(1)?.[0];
+        if (!(b1 instanceof Uint8Array)) continue;
+        const d1 = decodeProto(b1);
+        const ttftSec = decodeProtoDuration(d1.get(11)?.[0]);
+        const retryCount = Number(d1.get(14)?.[0] || 0);
+        const attempts = (d1.get(17) || []).length;
+        genMap.set(Number(gRow.idx), {
+          ttftSec,
+          retried: retryCount > 0 || attempts > 1,
+        });
+      }
+    }
+
+    const rows = db
+      .prepare('SELECT metadata FROM steps WHERE step_type = 15 AND status = 3 ORDER BY rowid ASC')
+      .all();
     let validSteps = 0;
     let modelSecTotal = 0;
     let tpsOut = 0;
     let tpsSec = 0;
+    let cleanTtftSecTotal = 0;
+    let cleanTtftCount = 0;
+    let lastCleanTtftSec = 0;
+    let allTtftSecTotal = 0;
+    let allTtftCount = 0;
+    let lastAllTtftSec = 0;
+    let stepSeqIdx = 0;
     for (const row of rows) {
       if (!(row?.metadata instanceof Uint8Array)) continue;
+      const currentSeq = stepSeqIdx++;
       const d = decodeProto(row.metadata);
       const t1 = decodeProtoTimestamp(d.get(1)?.[0]);
       const t6 = decodeProtoTimestamp(d.get(6)?.[0]);
@@ -147,12 +195,46 @@ export function readDbTimingStats(convId, opts = {}) {
         tpsOut += out;
         tpsSec += t7 - t6;
       }
+      const f20 = d.get(20)?.[0];
+      const genIdx =
+        f20 instanceof Uint8Array ? Number(decodeProto(f20).get(3)?.[0] ?? 0) : currentSeq;
+      const genInfo = genMap.get(genIdx);
+      const stepTtftSec =
+        genInfo && genInfo.ttftSec > 0 && genInfo.ttftSec < 600
+          ? genInfo.ttftSec
+          : t6 > t1 && t6 <= t7 && t6 - t1 < 600
+            ? t6 - t1
+            : 0;
+      if (stepTtftSec > 0) {
+        allTtftCount++;
+        allTtftSecTotal += stepTtftSec;
+        lastAllTtftSec = stepTtftSec;
+        if (!genInfo?.retried) {
+          cleanTtftCount++;
+          cleanTtftSecTotal += stepTtftSec;
+          lastCleanTtftSec = stepTtftSec;
+        }
+      }
     }
     if (validSteps > 0) {
+      const lastTtftMs =
+        cleanTtftCount > 0
+          ? Math.round(lastCleanTtftSec * 1000)
+          : allTtftCount > 0
+            ? Math.round(lastAllTtftSec * 1000)
+            : null;
+      const avgTtftMs =
+        cleanTtftCount > 0
+          ? Math.round((cleanTtftSecTotal / cleanTtftCount) * 1000)
+          : allTtftCount > 0
+            ? Math.round((allTtftSecTotal / allTtftCount) * 1000)
+            : null;
       val = {
         hasData: true,
         tps: tpsSec > 0 ? Math.round(tpsOut / tpsSec) : 0,
         modelMs: Math.round(modelSecTotal * 1000),
+        lastTtftMs,
+        avgTtftMs,
       };
     }
     querySucceeded = true;

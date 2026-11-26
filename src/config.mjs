@@ -32,7 +32,7 @@ export function normalizeOpacity(val, fallback = 0.12) {
   return Math.min(1, Math.max(0, Number(n.toFixed(4))));
 }
 
-export const VALID_STATS_ITEMS = ['status', 'turns', 'tokens', 'context'];
+export const VALID_STATS_ITEMS = ['status', 'turns', 'ttft', 'tokens', 'context'];
 
 export function normalizeStatsBarItems(items) {
   const valid = new Set(VALID_STATS_ITEMS);
@@ -47,9 +47,9 @@ export const DEFAULT_CDP_PORT = normalizePort(process.env.AGY_CDP_PORT, 9222);
 export const PREFERRED_STATS_PORT = normalizePort(process.env.AGY_STATS_PORT, 9223);
 export const WALLPAPER_STYLE_ID = 'agy-custom-wallpaper';
 export const UI_STYLE_ID = 'agy-clean-ui';
-export const STATS_BAR_VERSION = 4;
-export const UI_STYLE_VERSION = 2;
-export const ESC_CANCEL_VERSION = 2;
+export const STATS_BAR_VERSION = 5;
+export const UI_STYLE_VERSION = 4;
+export const ESC_CANCEL_VERSION = 3;
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -93,14 +93,14 @@ export const I18N = {
     opacity: '背景透明度',
     enableFlat: '启用样式扁平化 (全局去阴影叠加 + 极简细边框)',
     enableEscCancel: '启用双击 ESC 取消生成 (2 秒内二次确认)',
-    enableStats: '启用底部会话统计栏 (轮数/步数 · tok/s · 缓存命中率)',
+    enableStats: '启用底部会话统计栏 (轮数/步数 · TTFT · tok/s · 缓存命中率)',
     statsClickTarget: '点击统计栏跳转地址',
-    statsBarItems: '底栏显示项 (status, turns, tokens, context)',
+    statsBarItems: '底栏显示项 (status, turns, ttft, tokens, context)',
     promptCdpPort: '请输入 CDP 端口 (1 ~ 65535)',
     promptImg: '请输入背景图片路径或 URL (输入 - 清空)',
     promptOpacity: '请输入透明度 (0.0 ~ 1.0)',
     promptClickTarget: '请输入点击统计栏跳转地址 (输入 - 清空)',
-    promptStatsItems: '输入底栏显示项，逗号分隔 (status, turns, tokens, context)',
+    promptStatsItems: '输入底栏显示项，逗号分隔 (status, turns, ttft, tokens, context)',
     currentValue: '当前',
     warnPort: '[warn] CDP 端口必须是 1 ~ 65535 的整数',
     warnOpacity: '[warn] 透明度必须是 0 ~ 1 之间的数字',
@@ -126,6 +126,10 @@ export const I18N = {
       popTitle: '会话统计',
       modelTime: '模型用时',
       tps: '输出速度 (TPS)',
+      ttftLast: '上轮 TTFT',
+      ttftAvg: '会话平均 TTFT',
+      ttftLastShort: '上轮',
+      ttftAvgShort: '均',
       outTok: '输出 Token',
       totTok: '总 Token',
       cacheRate: '缓存命中率',
@@ -156,14 +160,14 @@ export const I18N = {
     opacity: 'Wallpaper Opacity',
     enableFlat: 'Enable Style Flattening (No Shadows + Hairline Borders)',
     enableEscCancel: 'Enable Double-ESC to Cancel Generation (2s confirmation)',
-    enableStats: 'Enable Bottom Stats Bar (Turns/Steps · tok/s · Cache Hit)',
+    enableStats: 'Enable Bottom Stats Bar (Turns/Steps · TTFT · tok/s · Cache Hit)',
     statsClickTarget: 'Stats Bar Click Target',
-    statsBarItems: 'Bottom Bar Items (status, turns, tokens, context)',
+    statsBarItems: 'Bottom Bar Items (status, turns, ttft, tokens, context)',
     promptCdpPort: 'Enter CDP port (1 ~ 65535)',
     promptImg: 'Enter wallpaper image path or URL (enter - to clear)',
     promptOpacity: 'Enter opacity (0.0 ~ 1.0)',
     promptClickTarget: 'Enter stats bar click target (enter - to clear)',
-    promptStatsItems: 'Enter bottom bar items, comma-separated (status, turns, tokens, context)',
+    promptStatsItems: 'Enter bottom bar items, comma-separated (status, turns, ttft, tokens, context)',
     currentValue: 'current',
     warnPort: '[warn] CDP port must be an integer between 1 and 65535',
     warnOpacity: '[warn] Opacity must be a number between 0 and 1',
@@ -189,6 +193,10 @@ export const I18N = {
       popTitle: 'Session Stats',
       modelTime: 'Model Time',
       tps: 'Output Speed (TPS)',
+      ttftLast: 'Last TTFT',
+      ttftAvg: 'Session Avg TTFT',
+      ttftLastShort: 'last',
+      ttftAvgShort: 'avg',
       outTok: 'Output Tokens',
       totTok: 'Total Tokens',
       cacheRate: 'Cache Hit Rate',

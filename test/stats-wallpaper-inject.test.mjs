@@ -208,26 +208,47 @@ test('injected scripts include key repeat guard, res.ok check, X-QoL-Token heade
   assert.ok(escJs.includes('.agy-overlay'));
   assert.ok(escJs.includes('[data-select-popup]'));
   assert.ok(escJs.includes('[data-hover-card-popup]'));
+  assert.ok(escJs.includes('[data-bottom-sheet-popup]:not([data-closed])'));
   assert.ok(escJs.includes('button[data-testid="input-cancel-button"]'));
   assert.ok(!escJs.includes('[data-base-ui-portal]'));
 
   assert.ok(CLEAN_INPUT_CSS.includes('.surface-composer > .surface-composer-card'));
+  assert.ok(CLEAN_INPUT_CSS.includes('border: 0 !important;'));
+  assert.ok(
+    CLEAN_INPUT_CSS.includes(
+      '.surface-composer > :not(.surface-composer-card, .voice-glow-ring, [hidden], [class*="grid-rows-[0fr]"]) ~ .surface-composer-card'
+    )
+  );
+  assert.ok(CLEAN_INPUT_CSS.includes('.surface-composer:focus-within'));
   assert.ok(CLEAN_INPUT_CSS.includes('.agy-overlay'));
   assert.ok(CLEAN_INPUT_CSS.includes('[role="alertdialog"]'));
   assert.ok(CLEAN_INPUT_CSS.includes('[data-select-popup]'));
   assert.ok(CLEAN_INPUT_CSS.includes('[data-hover-card-popup]'));
   assert.ok(CLEAN_INPUT_CSS.includes('[data-peek-surface]::after'));
   assert.ok(CLEAN_INPUT_CSS.includes('tiling-splitter'));
+  assert.ok(
+    CLEAN_INPUT_CSS.includes(
+      '.agy-sheet[data-side-panel-docked] [data-side-panel-strip]:not([data-active-tab-id="newTab__empty"])::before'
+    )
+  );
   assert.ok(CLEAN_INPUT_CSS.includes('data-has-browser-hole="true"'));
   assert.ok(!CLEAN_INPUT_CSS.includes('media-modal-header'));
 
-  const statsJs = buildStatsBarInjectJS('zh', 'sidecar__context/context_panel__/', ['status', 'turns'], 9555, 'secret_tok');
+  const statsJs = buildStatsBarInjectJS(
+    'zh',
+    'sidecar__context/context_panel__/',
+    ['status', 'turns', 'ttft'],
+    9555,
+    'secret_tok'
+  );
   assert.ok(statsJs.includes('window.__agyStatsPort = STATS_PORT'));
   assert.ok(statsJs.includes('window.__agyRenderStats = (convId, d) =>'));
   assert.ok(statsJs.includes("'X-QoL-Token': STATS_TOKEN"));
   assert.ok(!statsJs.includes('?t='));
   assert.ok(statsJs.includes('if (!res.ok)'));
   assert.ok(statsJs.includes('summary.dataset.lastHtml !== nextSummaryHtml'));
+  assert.ok(statsJs.includes('formatTtft(d.lastTtftMs)'));
+  assert.ok(statsJs.includes('formatTtft(d.avgTtftMs)'));
   assert.ok(statsJs.includes('sidePanelV2/setContent'));
   assert.ok(statsJs.includes('sidePanel/setSidePanelOpen'));
 
@@ -259,6 +280,12 @@ test('injected scripts include key repeat guard, res.ok check, X-QoL-Token heade
   );
   assert.equal(exprEmptyWp.includes('agy-custom-wallpaper'), false);
   assert.equal(exprEmptyWp.includes('window.__agyStatsPort !== 9555'), true);
-  assert.equal(exprEmptyWp.includes(`dataset?.agyVersion !== "${UI_STYLE_VERSION}"`), true);
-  assert.equal(exprEmptyWp.includes(`window.__agyEscCancelVersion !== ${ESC_CANCEL_VERSION}`), true);
+  assert.equal(
+    exprEmptyWp.includes(`dataset?.agyVersion || 0) < ${UI_STYLE_VERSION}`),
+    true
+  );
+  assert.equal(
+    exprEmptyWp.includes(`Number(window.__agyEscCancelVersion || 0) < ${ESC_CANCEL_VERSION}`),
+    true
+  );
 });
