@@ -3,11 +3,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { MAX_IMAGE_BYTES, MIME_MAP, t } from './config.mjs';
 
-export function expandHomePath(inputPath) {
+export function expandHomePath(inputPath, opts = {}) {
   const raw = String(inputPath || '').trim();
   if (raw === '~') return os.homedir();
   if (raw.startsWith('~/') || raw.startsWith('~\\')) {
     return path.join(os.homedir(), raw.slice(2));
+  }
+  const platform = opts.platform || process.platform;
+  if (platform === 'linux') {
+    const winMatch = raw.match(/^([a-zA-Z]):[\\/](.*)$/);
+    if (winMatch) {
+      const mntRoot = opts.mntRoot || '/mnt';
+      const driveDir = path.posix.join(mntRoot, winMatch[1].toLowerCase());
+      const checkExists = opts.existsSync || fs.existsSync;
+      if (checkExists(driveDir)) {
+        return path.posix.join(driveDir, winMatch[2].replace(/\\/g, '/'));
+      }
+    }
   }
   return raw;
 }

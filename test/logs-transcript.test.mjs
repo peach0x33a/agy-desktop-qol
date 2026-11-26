@@ -173,6 +173,34 @@ test('getLanguageServerLogPath discovers newest remote server ls-*.log in .antig
   }
 });
 
+test('getLanguageServerLogPath on Linux WSL prefers newer Windows host language_server.log over stale ls-*.log', () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-qol-wsl-log-'));
+  const wslHome = path.join(tmpRoot, 'wsl-home');
+  const winHome = path.join(tmpRoot, 'win-home');
+  const hubData = path.join(wslHome, '.antigravity-hub-server', 'data');
+  const winLogs = path.join(winHome, 'AppData', 'Roaming', 'Antigravity', 'logs');
+  fs.mkdirSync(hubData, { recursive: true });
+  fs.mkdirSync(winLogs, { recursive: true });
+  const staleHubLog = path.join(hubData, 'ls-2.34.0.log');
+  const liveWinLog = path.join(winLogs, 'language_server.log');
+  try {
+    fs.writeFileSync(staleHubLog, 'stale');
+    fs.writeFileSync(liveWinLog, 'live');
+    const past = new Date(Date.now() - 60000);
+    fs.utimesSync(staleHubLog, past, past);
+    assert.equal(
+      getLanguageServerLogPath(wslHome, {
+        osHomedir: wslHome,
+        platform: 'linux',
+        candidateHomes: [wslHome, winHome],
+      }),
+      liveWinLog
+    );
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
 test('CHECKPOINT immediately drops lastContextTokens and lastCacheHitRate tracks latest turn', () => {
   clearTranscriptCache();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-qol-cp-'));
