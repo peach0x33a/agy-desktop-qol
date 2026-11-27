@@ -1,18 +1,27 @@
 #!/bin/sh
-if command -v node >/dev/null 2>&1; then
-  exec node "$@"
+try_exec() {
+  bin="$1"
+  shift
+  if [ -n "$bin" ] && [ -x "$bin" ] && "$bin" -v >/dev/null 2>&1; then
+    exec "$bin" "$@"
+  fi
+}
+
+try_exec "$HOME/Library/Application Support/Antigravity/bin/agy-node" "$@"
+try_exec "$HOME/.config/Antigravity/bin/agy-node" "$@"
+
+if path_node="$(command -v node 2>/dev/null)"; then
+  try_exec "$path_node" "$@"
 fi
+
 for p in \
   "/opt/homebrew/bin/node" \
   "/usr/local/bin/node" \
   "$HOME/.nvm/current/bin/node" \
   "$HOME/.volta/bin/node" \
-  "$HOME/.fnm/current/bin/node" \
-  "$HOME/Library/Application Support/Antigravity/bin/agy-node" \
-  "$HOME/.config/Antigravity/bin/agy-node"; do
-  if [ -x "$p" ]; then
-    exec "$p" "$@"
-  fi
+  "$HOME/.fnm/current/bin/node"; do
+  try_exec "$p" "$@"
 done
-echo "[error] Node.js runtime not found" >&2
+
+echo "[error] Working Node.js runtime not found" >&2
 exit 1
