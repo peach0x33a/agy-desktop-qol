@@ -148,6 +148,14 @@ test('isInjectablePage filters out devtools, extensions, and data URLs', () => {
 
 test('expandHomePath and resolveWallpaperBgUrl validate local and remote images properly', async () => {
   assert.equal(expandHomePath('~/test.png'), path.join(os.homedir(), 'test.png'));
+  assert.equal(
+    expandHomePath('C:\\Users\\demo\\Pictures\\bg.png', {
+      platform: 'linux',
+      mntRoot: '/mnt',
+      existsSync: (p) => p === '/mnt/c',
+    }),
+    '/mnt/c/Users/demo/Pictures/bg.png'
+  );
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-qol-wp-'));
   const imgFile = path.join(tmpDir, 'tiny.png');

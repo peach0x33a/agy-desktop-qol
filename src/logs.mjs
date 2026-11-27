@@ -110,9 +110,11 @@ export function resolveConvHomeDir(convId) {
   return os.homedir();
 }
 
-export function getLanguageServerLogPath(homeDir) {
-  const home = homeDir || os.homedir();
-  const isLocalHome = home === os.homedir();
+export function getLanguageServerLogPath(homeDir, opts = {}) {
+  const home = homeDir || opts.osHomedir || os.homedir();
+  const isLocalHome = home === (opts.osHomedir || os.homedir());
+  const platform = opts.platform || process.platform;
+  const candidateHomes = opts.candidateHomes || (platform === 'linux' && isLocalHome ? getCandidateHomeDirs() : []);
 
   let newestHub = null;
   const hubLogDir = path.join(home, '.antigravity-hub-server', 'data');
@@ -138,9 +140,9 @@ export function getLanguageServerLogPath(homeDir) {
   }
 
   const candidates =
-    process.platform === 'darwin'
+    platform === 'darwin'
       ? [path.join(home, 'Library', 'Logs', 'Antigravity', 'language_server.log')]
-      : process.platform === 'win32' && isLocalHome
+      : platform === 'win32' && isLocalHome
         ? [
             path.join(process.env.APPDATA || '', 'Antigravity', 'logs', 'language_server.log'),
             path.join(process.env.LOCALAPPDATA || '', 'Antigravity', 'logs', 'language_server.log'),
@@ -151,6 +153,16 @@ export function getLanguageServerLogPath(homeDir) {
             path.join(home, 'AppData', 'Roaming', 'Antigravity', 'logs', 'language_server.log'),
             path.join(home, 'AppData', 'Local', 'Antigravity', 'logs', 'language_server.log'),
           ];
+
+  if (platform === 'linux' && isLocalHome) {
+    for (const dir of candidateHomes) {
+      if (dir === home) continue;
+      candidates.push(
+        path.join(dir, 'AppData', 'Roaming', 'Antigravity', 'logs', 'language_server.log'),
+        path.join(dir, 'AppData', 'Local', 'Antigravity', 'logs', 'language_server.log')
+      );
+    }
+  }
 
   let newestDesktop = null;
   for (const p of candidates) {
